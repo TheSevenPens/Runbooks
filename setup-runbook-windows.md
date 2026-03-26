@@ -1,5 +1,5 @@
 # Windows Machine Setup Runbook
-> **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the setup runbook at setup-runbook.md. Walk me through each section, automate what you can, and tell me when I need to do something manually. Be aware we me be using a machine were some components are already installed. And may be installed through an alternative means than described in the runbook. We need to decide how to handle them"*
+> **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the setup runbook at setup-runbook-windows.md. Walk me through each section, automate what you can, and tell me when I need to do something manually. Be aware we may be using a machine where some components are already installed. And may be installed through an alternative means than described in the runbook. We need to decide how to handle them."*
 
 ---
 

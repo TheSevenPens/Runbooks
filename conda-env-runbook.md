@@ -2,10 +2,14 @@
 
 > **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the conda environment runbook at conda-env-runbook.md. Walk me through each section, automate what you can, and tell me when I need to do something manually."*
 >
-> **Prerequisites:** The following should already be installed before running this runbook. If not, see [setup-runbook.md](setup-runbook.md).
-> - **PowerShell 7** (`pwsh`) — needed to run install commands and shell init (Section 6)
-> - **Git for Windows** — provides Git Bash, needed for bash shell init (Section 1)
+> **Prerequisites (Windows):** The following should already be installed. If not, see [setup-runbook-windows.md](setup-runbook-windows.md).
+> - **PowerShell 7** (`pwsh`) — needed to run install commands and shell init
+> - **Git for Windows** — provides Git Bash, needed for bash shell init
 > - **winget** — used to install Miniconda (ships with Windows 11; on Windows 10, install via Microsoft Store)
+>
+> **Prerequisites (macOS):** The following should already be installed. If not, see [setup-runbook-mac.md](setup-runbook-mac.md).
+> - **Homebrew** — used to install Miniconda and Micromamba
+> - **Git** — ships with macOS (Xcode CLI tools) or install via brew
 
 ---
 
