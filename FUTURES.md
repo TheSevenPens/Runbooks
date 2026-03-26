@@ -4,9 +4,9 @@ Ideas and planned improvements for the runbook system.
 
 ---
 
-## Cross-platform support (macOS)
+## Cross-platform support (macOS) — ✅ Implemented
 
-When adding macOS support, use a three-file structure:
+Three-file structure is now in place:
 
 ```
 setup-runbook-windows.md    — Windows-specific installs & config
@@ -36,6 +36,16 @@ Many runbook steps are deterministic and could be extracted into standalone scri
 | `verify-shell-integration.ps1` | Test conda/micromamba activate across all shells, output results table | Currently manual; a script could test programmatically and report pass/fail |
 | `create-env.ps1` | Create a conda environment from a spec, verify all packages | Wraps ToS acceptance, environment creation, and package verification |
 
+### macOS candidates for extraction
+
+| Script | What it does | Why it's better as a script |
+|---|---|---|
+| `verify-prerequisites.sh` | Check if brew, git, conda, micromamba are installed; report versions, install method (brew vs standalone), and binary paths | Replaces scattered `--version` + `which` checks; catches stale binaries (e.g., old standalone micromamba vs brew) |
+| `verify-shell-integration.sh` | Test `conda activate` and `micromamba activate` in zsh and bash, output results table | The correct shell flags are non-obvious (`zsh -i`, `bash -l -i`) and easy to get wrong; a script encodes the right invocation |
+| `configure-shared-envs.sh` | Set `envs_dirs` in both conda config and `.mambarc` to a shared directory, verify both tools agree | Fiddly multi-file config that's easy to miss or leave inconsistent |
+| `create-env.sh` | Create a conda/micromamba environment from a spec, verify all packages | Wraps ToS acceptance, environment creation, and package verification |
+| `migrate-micromamba.sh` | Detect standalone micromamba, install brew version, update shell init blocks, remove old binary | The migration has multiple steps and touching the wrong `.zshrc` block could break things |
+
 ### Proposed structure
 
 ```
@@ -52,7 +62,11 @@ Runbooks/
       verify-shell-integration.ps1
       create-env.ps1
     mac/
-      (future)
+      verify-prerequisites.sh
+      verify-shell-integration.sh
+      configure-shared-envs.sh
+      create-env.sh
+      migrate-micromamba.sh
 ```
 
 ### Design principles for scripts

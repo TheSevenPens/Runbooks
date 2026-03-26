@@ -9,20 +9,22 @@
 >
 > **Prerequisites (macOS):** The following should already be installed. If not, see [setup-runbook-mac.md](setup-runbook-mac.md).
 > - **Homebrew** — used to install Miniconda and Micromamba
-> - **Git** — ships with macOS (Xcode CLI tools) or install via brew
+> - **Git** — install via Homebrew (recommended) or use Apple Git from Xcode CLI tools
+>
+> 📝 **Quick check (macOS):** Run `scripts/mac/verify-prerequisites.sh` to check what's already installed before starting.
 
 ---
 
 ## Section 1 — Miniconda
 
-**Method:** Winget (preferred) or direct download fallback.
+### Windows
 
-### 1a. Install via Winget
+#### 1a. Install via Winget
 ```powershell
 winget install -e --id Anaconda.Miniconda3 --silent
 ```
 
-### 1b. Fallback — Direct Download
+#### 1b. Fallback — Direct Download
 - Installer URL: https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
 - Download and run silently:
 ```powershell
@@ -32,7 +34,7 @@ Invoke-WebRequest -Uri $url -OutFile $dest
 Start-Process -FilePath $dest -Args "/S /AddToPath=1 /RegisterPython=1" -Wait
 ```
 
-### 1c. Add to PATH
+#### 1c. Add to PATH
 > ⚠️ **Claude Code note:** The winget/silent installer does **not** reliably add conda to PATH. After install, verify the binary exists at `%USERPROFILE%\miniconda3\Scripts\conda.exe`, then ensure these three directories are on the **user** PATH:
 > - `%USERPROFILE%\miniconda3`
 > - `%USERPROFILE%\miniconda3\Scripts`
@@ -45,16 +47,8 @@ Start-Process -FilePath $dest -Args "/S /AddToPath=1 /RegisterPython=1" -Wait
 > Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value $val -Type ExpandString
 > ```
 
-### 1d. Accept Terms of Service
-> ⚠️ **Claude Code note:** Fresh installs of conda require accepting ToS for the default Anaconda channels before any environment can be created. Ask the user for permission, then run:
-```powershell
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2
-```
-
-### 1e. Initialize conda for all shells
-Initialize conda shell hooks so `conda activate` works in every shell type. Each command modifies the relevant profile/config for that shell.
+#### 1d. Initialize conda for all shells (Windows)
+Initialize conda shell hooks so `conda activate` works in every shell type:
 ```powershell
 conda init powershell
 conda init bash
@@ -70,8 +64,42 @@ conda init cmd.exe
 > Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 > ```
 
-### 1f. Verify
-```powershell
+### macOS
+
+#### 1a. Install via Homebrew
+```zsh
+brew install miniconda
+```
+
+> 📝 **Note:** Homebrew handles PATH setup automatically. After install, `conda` should be available in new terminal sessions. If not, run `conda init zsh` (see step 1d below) and open a new terminal.
+
+#### 1b. Initialize conda for all shells (macOS)
+```zsh
+conda init zsh
+conda init bash
+```
+> 📝 **What each does:**
+> - `zsh` — modifies `~/.zshrc` (macOS default shell)
+> - `bash` — modifies `~/.bash_profile` or `~/.bashrc`
+>
+> ⚠️ **Manual step:** Close and reopen your terminal after running these.
+
+### Cross-platform
+
+#### Accept Terms of Service
+> ⚠️ **Claude Code note:** Fresh installs of conda require accepting ToS for the default Anaconda channels before any environment can be created. Ask the user for permission, then run:
+```sh
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+> 📝 **Note (Windows only):** Also accept the msys2 channel:
+> ```powershell
+> conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2
+> ```
+
+#### Verify
+```sh
 conda --version
 ```
 
@@ -79,9 +107,9 @@ conda --version
 
 ## Section 2 — Micromamba
 
-**Method:** PowerShell install script from the official source.
+### Windows
 
-### 2a. Install Micromamba
+#### 2a. Install Micromamba
 ```powershell
 Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -UseBasicParsing).Content)
 ```
@@ -90,13 +118,13 @@ Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -U
 > Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 > ```
 
-### 2b. Copy binary to a reliable PATH location
+#### 2b. Copy binary to a reliable PATH location
 > ⚠️ **Claude Code note:** The micromamba installer places the binary in `%USERPROFILE%\AppData\Local\micromamba\` and adds that directory to the user PATH. However, CMD may fail to find the binary at that location even when the PATH entry is correct (likely a Windows filesystem quirk). **Workaround:** copy `micromamba.exe` into `%USERPROFILE%\miniconda3\Scripts\` which is already on PATH and known to work reliably from all shells.
 > ```powershell
 > Copy-Item "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe" "$env:USERPROFILE\miniconda3\Scripts\micromamba.exe"
 > ```
 
-### 2c. Initialize micromamba shell hooks for all shells
+#### 2c. Initialize micromamba shell hooks for all shells (Windows)
 For consistency with conda, initialize micromamba's shell integration for every shell type:
 ```powershell
 micromamba shell init -s powershell -r $env:USERPROFILE\micromamba
@@ -114,9 +142,55 @@ micromamba shell init -s cmd.exe -r $env:USERPROFILE\micromamba
 > ```
 > The `mamba_hook.bat` path should point to `C:\Users\<user>\micromamba\condabin\mamba_hook.bat`.
 
-### 2d. Prevent double `(base)` prompt
-Both conda and micromamba will auto-activate their `(base)` environment on shell startup, resulting in a double `(base) (base)` prompt. Disable auto-activate on one of them:
+### macOS
+
+#### 2a. Install Micromamba
+```zsh
+brew install micromamba
+```
+
+> 📝 **Note:** Homebrew handles the binary placement and PATH. No manual copy or PATH workaround is needed on macOS.
+
+#### 2b. Initialize micromamba shell hooks for all shells (macOS)
+```zsh
+micromamba shell init -s zsh -r ~/micromamba
+micromamba shell init -s bash -r ~/micromamba
+```
+> 📝 **What each does:**
+> - `zsh` — modifies `~/.zshrc`
+> - `bash` — modifies `~/.bash_profile` or `~/.bashrc`
+>
+> ⚠️ **Manual step:** Close and reopen your terminal after running these.
+
+### Cross-platform
+
+#### Configure shared environments directory
+By default, conda and micromamba store environments in different locations. To ensure both tools can see and activate the same environments, configure them to use a single shared directory.
+
+On macOS, use `~/micromamba/envs` (the micromamba root prefix — user-owned, survives conda removal if you transition fully to micromamba):
+```zsh
+# Tell conda to create environments in micromamba's directory
+conda config --prepend envs_dirs ~/micromamba/envs
+```
+
+Update `~/.mambarc` to point to the same location:
+```yaml
+envs_dirs:
+  - ~/micromamba/envs
+```
+
+On Windows, use `%USERPROFILE%\micromamba\envs`:
 ```powershell
+conda config --prepend envs_dirs $env:USERPROFILE\micromamba\envs
+```
+
+Update `%USERPROFILE%\.mambarc` similarly.
+
+> ⚠️ **Claude Code note:** After configuring, verify with `conda config --show envs_dirs` and `micromamba config list` — both should show the shared directory as the first entry. Any existing environments in the old location will need to be recreated or moved.
+
+#### Prevent double `(base)` prompt
+Both conda and micromamba will auto-activate their `(base)` environment on shell startup, resulting in a double `(base) (base)` prompt. Disable auto-activate on one of them:
+```sh
 # If you prefer micromamba as your primary tool:
 conda config --set auto_activate_base false
 
@@ -125,8 +199,8 @@ micromamba config set auto_activate_base false
 ```
 > 🤔 **Claude Code: Ask the user which they prefer** before choosing which to disable.
 
-### 2e. Verify
-```powershell
+#### Verify
+```sh
 micromamba --version
 ```
 
@@ -135,8 +209,12 @@ micromamba --version
 ## Section 3 — Verify Shell Integration
 
 > 🤔 **Claude Code: Always run this verification and show the results to the user as a summary table.**
+>
+> 📝 **macOS shortcut:** Run `scripts/mac/verify-shell-integration.sh` to automate all checks below and produce the summary table.
 
 Test that `conda activate` and `micromamba activate` work in every shell. For each shell, check that the command is recognized (not just that the binary is on PATH — the shell hook must be functional).
+
+### Windows
 
 | Shell | Test command | What to check |
 |---|---|---|
@@ -145,8 +223,18 @@ Test that `conda activate` and `micromamba activate` work in every shell. For ea
 | CMD | Open CMD → run `conda activate base` then `micromamba activate base` | Both commands succeed without error |
 | Git Bash | Open Git Bash → run `conda activate base` then `micromamba activate base` | Both commands succeed without error |
 
+### macOS
+
+| Shell | Test command | What to check |
+|---|---|---|
+| zsh | `zsh -i -c "conda activate base && echo 'conda: works'; micromamba activate base && echo 'micromamba: works'"` | Both commands succeed without error |
+| bash | `bash -l -i -c "conda activate base && echo 'conda: works'; micromamba activate base && echo 'micromamba: works'"` | Both commands succeed without error |
+
+> ⚠️ **Claude Code note:** Shell hooks only load in interactive shells. Use `zsh -i` (not `zsh -l`) for zsh. For bash on macOS, use `bash -l -i` — the `-l` is needed because conda/micromamba init blocks are in `~/.bash_profile` (login shell), and `-i` is needed for the hooks to activate. Terminal.app and iTerm2 open login shells by default, so this matches real-world usage.
+
 Present results to the user in this format:
 
+**Windows:**
 ```
 | Shell          | conda activate | micromamba activate |
 |----------------|----------------|---------------------|
@@ -156,7 +244,15 @@ Present results to the user in this format:
 | Git Bash       | works / broken | works / broken      |
 ```
 
-> 📝 **Note:** Some shells may require closing and reopening after init. If a shell fails, re-run the relevant init command from Sections 1e/2c and retest.
+**macOS:**
+```
+| Shell | conda activate | micromamba activate |
+|-------|----------------|---------------------|
+| zsh   | works / broken | works / broken      |
+| bash  | works / broken | works / broken      |
+```
+
+> 📝 **Note:** Some shells may require closing and reopening after init. If a shell fails, re-run the relevant init command from Sections 1/2 and retest.
 
 ---
 
@@ -165,7 +261,7 @@ Present results to the user in this format:
 Creates a new conda environment named `node1` with all required packages from conda-forge.
 
 ### 4a. Create the environment
-```powershell
+```sh
 conda create -n node1 -c conda-forge nodejs python gh -y
 ```
 
@@ -173,10 +269,10 @@ conda create -n node1 -c conda-forge nodejs python gh -y
 > - `nodejs` — installs Node.js and npm
 > - `python` — latest stable Python
 > - `gh` — GitHub CLI
-> - `git` is intentionally omitted — Git for Windows should be installed system-wide and available everywhere, including inside this environment
+> - `git` is intentionally omitted — Git should be installed system-wide and available everywhere, including inside this environment
 
 ### 4b. Activate and verify
-```powershell
+```sh
 conda activate node1
 node --version
 python --version
@@ -185,7 +281,7 @@ gh --version
 ```
 
 ### 4c. (Optional) Activate via micromamba
-```powershell
+```sh
 micromamba activate node1
 ```
 
@@ -193,23 +289,42 @@ micromamba activate node1
 
 ## Notes & Known Issues
 
+### Windows
+
 | Issue | Fix |
 |---|---|
 | `conda` not found after install | Restart terminal or re-run `conda init powershell`. Also check that miniconda3 paths are on user PATH (see Section 1c) |
 | User PATH entries ignored by CMD | Check that `HKCU\Environment\Path` registry value type is `REG_EXPAND_SZ`, not `REG_SZ` (see Section 1c) |
 | `micromamba` not found after install | Copy binary to `miniconda3\Scripts\` (see Section 2b) |
-| Double `(base)` prompt | Disable auto_activate_base on one of conda/micromamba (see Section 2d) |
-| Conda ToS blocks environment creation | Accept ToS for default channels (see Section 1d) |
+| `micromamba shell init -s cmd.exe` produces mangled path | Run it from PowerShell, not Git Bash. Verify the AutoRun registry value afterward (see Section 2c) |
 | Execution policy blocks micromamba install | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
+
+### macOS
+
+| Issue | Fix |
+|---|---|
+| `conda` not found after brew install | Run `conda init zsh`, then open a new terminal |
+| `micromamba` not found after brew install | Run `micromamba shell init -s zsh -r ~/micromamba`, then open a new terminal |
+| Shell init modifies wrong file | Ensure you're running init for the correct shell (`zsh` for macOS default, not `bash`) |
+| Migrating from standalone micromamba to brew | Install via brew, re-run `micromamba shell init` to update `MAMBA_EXE` path in `.zshrc`/`.bash_profile`, then remove the old binary (e.g., `~/.local/bin/micromamba`). The `~/micromamba` root prefix and existing environments are preserved. |
+| conda and micromamba don't share environments | Configure a shared `envs_dirs` in both tools (see Section 2 — "Configure shared environments directory") |
+
+### Cross-platform
+
+| Issue | Fix |
+|---|---|
+| Double `(base)` prompt | Disable auto_activate_base on one of conda/micromamba (see Section 2) |
+| Conda ToS blocks environment creation | Accept ToS for default channels (see Section 1) |
 | `gh` auth needed after install | Run `gh auth login` manually |
 | conda-forge packages slow to resolve | Add `--solver=libmamba` flag or use micromamba instead |
-| `micromamba shell init -s cmd.exe` produces mangled path | Run it from PowerShell, not Git Bash. Verify the AutoRun registry value afterward (see Section 2c) |
 
 ---
 
 ## Status Tracker
+
 > Claude Code: Reset these checkboxes before starting a new run. Check them off as each step completes.
 
+### Windows
 - [ ] Miniconda installed
 - [ ] Miniconda PATH verified (three directories + REG_EXPAND_SZ check)
 - [ ] Conda ToS accepted
@@ -221,6 +336,23 @@ micromamba activate node1
 - [ ] Micromamba binary copied to miniconda3\Scripts
 - [ ] Micromamba shell init completed (powershell, bash, cmd.exe)
 - [ ] Micromamba CMD AutoRun path verified
+- [ ] Double (base) prompt resolved
+- [ ] Micromamba verified (`micromamba --version`)
+- [ ] Shell integration verified across all shells (table shown to user)
+- [ ] Environment `node1` created
+- [ ] node verified in node1
+- [ ] python verified in node1
+- [ ] gh verified in node1
+
+### macOS
+- [ ] Miniconda installed via Homebrew
+- [ ] Conda ToS accepted
+- [ ] conda initialized for zsh (`conda init zsh`)
+- [ ] conda initialized for bash (`conda init bash`)
+- [ ] Miniconda verified (`conda --version`)
+- [ ] Micromamba installed via Homebrew
+- [ ] Micromamba shell init completed (zsh, bash)
+- [ ] Shared envs_dirs configured (`~/micromamba/envs` for both tools)
 - [ ] Double (base) prompt resolved
 - [ ] Micromamba verified (`micromamba --version`)
 - [ ] Shell integration verified across all shells (table shown to user)
