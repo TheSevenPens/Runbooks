@@ -12,6 +12,7 @@
 #   6. Remove .condarc
 #   7. Clean conda init block from .bash_profile
 #   8. Clean conda init block from PowerShell profiles
+#   9. Clean stale conda entries from .conda\environments.txt
 #
 # Output: Structured lines prefixed with OK / WARN / SKIP / INFO / FAIL
 # Exit code: 0 on success, 1 on failure
@@ -214,7 +215,26 @@ foreach ($profilePath in $psProfiles) {
     }
 }
 
-# --- Step 9: Verify ---
+# --- Step 9: Clean stale entries from environments.txt ---
+
+Write-Host ""
+Write-Host "--- Step 9: Clean stale conda entries from environments.txt ---"
+$envsTxt = "$env:USERPROFILE\.conda\environments.txt"
+if (Test-Path $envsTxt) {
+    $lines = Get-Content $envsTxt
+    $cleanLines = $lines | Where-Object { $_ -notmatch 'miniconda|anaconda' }
+    $removedCount = $lines.Count - $cleanLines.Count
+    if ($removedCount -gt 0) {
+        Set-Content -Path $envsTxt -Value $cleanLines
+        Write-Host "OK: Removed $removedCount stale conda entry/entries from $envsTxt"
+    } else {
+        Write-Host "SKIP: No conda entries in $envsTxt"
+    }
+} else {
+    Write-Host "SKIP: $envsTxt not found"
+}
+
+# --- Step 10: Verify ---
 
 Write-Host ""
 Write-Host "--- Verification ---"

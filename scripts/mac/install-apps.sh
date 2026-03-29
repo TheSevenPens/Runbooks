@@ -99,9 +99,16 @@ for app_def in "${APPS[@]}"; do
     if [[ -n "$verify_cmd" ]]; then
         exe_path="$(resolve_exe "$verify_cmd" "$canonical_path")"
         if [[ -n "$exe_path" ]]; then
-            version="$(get_version "$exe_path" "$verify_flag")"
-            echo "SKIP: ${name} already installed — ${version}"
-            already_installed=true
+            # For formulas with a canonical path, only accept the brew version.
+            # This prevents Apple Git (/usr/bin/git) from shadowing brew git.
+            if [[ "$type" == "formula" && -n "$canonical_path" && "$exe_path" != "$canonical_path" ]]; then
+                version="$(get_version "$exe_path" "$verify_flag")"
+                echo "INFO: ${name} found at ${exe_path} — ${version} (not brew version, will install)"
+            else
+                version="$(get_version "$exe_path" "$verify_flag")"
+                echo "SKIP: ${name} already installed — ${version}"
+                already_installed=true
+            fi
         fi
     fi
 

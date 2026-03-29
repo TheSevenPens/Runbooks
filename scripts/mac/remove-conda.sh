@@ -11,7 +11,8 @@
 #   4. Remove .condarc
 #   5. Clean conda init block from .zshrc
 #   6. Clean conda init block from .bash_profile
-#   7. Verify removal
+#   7. Clean stale conda entries from ~/.conda/environments.txt
+#   8. Verify removal
 #
 # Output: Structured lines prefixed with OK / WARN / SKIP / INFO / FAIL
 # Exit code: 0 on success, 1 on failure
@@ -72,23 +73,44 @@ fi
 echo ""
 echo "--- Step 2: Uninstall via brew ---"
 if command -v brew &>/dev/null; then
-    if brew list miniconda &>/dev/null 2>&1; then
-        if brew uninstall miniconda 2>/dev/null; then
-            echo "OK: miniconda uninstalled via brew"
-        else
-            echo "WARN: brew uninstall miniconda returned non-zero"
+    brew_found=""
+    brew_type=""
+
+    # Check casks first — miniconda/anaconda are almost always casks
+    for cask in miniconda anaconda; do
+        if brew list --cask "$cask" &>/dev/null 2>&1; then
+            brew_found="$cask"
+            brew_type="cask"
+            break
         fi
-    elif brew list --cask miniconda &>/dev/null 2>&1; then
-        if brew uninstall --cask miniconda 2>/dev/null; then
-            echo "OK: miniconda cask uninstalled via brew"
+    done
+
+    # Fall back to formula check
+    if [[ -z "$brew_found" ]]; then
+        for formula in miniconda anaconda; do
+            if brew list "$formula" &>/dev/null 2>&1; then
+                brew_found="$formula"
+                brew_type="formula"
+                break
+            fi
+        done
+    fi
+
+    if [[ -n "$brew_found" ]]; then
+        if [[ "$brew_type" == "cask" ]]; then
+            uninstall_output="$(brew uninstall --cask "$brew_found" 2>&1)" && {
+                echo "OK: $brew_found cask uninstalled via brew"
+            } || {
+                echo "WARN: brew uninstall --cask $brew_found returned non-zero"
+                echo "  $uninstall_output"
+            }
         else
-            echo "WARN: brew uninstall --cask miniconda returned non-zero"
-        fi
-    elif brew list anaconda &>/dev/null 2>&1; then
-        if brew uninstall anaconda 2>/dev/null; then
-            echo "OK: anaconda uninstalled via brew"
-        else
-            echo "WARN: brew uninstall anaconda returned non-zero"
+            uninstall_output="$(brew uninstall "$brew_found" 2>&1)" && {
+                echo "OK: $brew_found uninstalled via brew"
+            } || {
+                echo "WARN: brew uninstall $brew_found returned non-zero"
+                echo "  $uninstall_output"
+            }
         fi
     else
         echo "SKIP: Neither miniconda nor anaconda found in brew"
@@ -156,7 +178,23 @@ else
     echo "SKIP: .bash_profile not found"
 fi
 
-# --- Step 7: Verify ---
+# --- Step 7: Clean stale entries from environments.txt ---
+
+echo ""
+echo "--- Step 7: Clean stale conda entries from environments.txt ---"
+envs_txt="$HOME/.conda/environments.txt"
+if [[ -f "$envs_txt" ]]; then
+    if grep -q 'miniconda\|anaconda' "$envs_txt" 2>/dev/null; then
+        grep -v 'miniconda\|anaconda' "$envs_txt" > "${envs_txt}.tmp" && mv "${envs_txt}.tmp" "$envs_txt"
+        echo "OK: Removed stale conda entries from $envs_txt"
+    else
+        echo "SKIP: No conda entries in $envs_txt"
+    fi
+else
+    echo "SKIP: $envs_txt not found"
+fi
+
+# --- Step 8: Verify ---
 
 echo ""
 echo "--- Verification ---"

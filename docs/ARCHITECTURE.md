@@ -177,6 +177,8 @@ Homebrew installs to `/opt/homebrew` on Apple Silicon (M1+) and `/usr/local` on 
 
 `/usr/bin/git` (Apple's Xcode CLI tools) may take precedence over Homebrew's git. After installing via brew, a new terminal is needed for Homebrew's path to take priority.
 
+In normal interactive terminals, Homebrew's `/opt/homebrew/bin` comes first on PATH, so brew git wins. However, non-interactive sessions (including Claude Code) may have a different PATH order where Apple Git at `/usr/bin/git` takes precedence. This is cosmetic — both versions are functionally equivalent for runbook purposes. The `verify-prerequisites.sh` script warns when Apple Git is the resolved version, which is useful for catching machines where brew git was never installed, but the warning can be safely ignored in Claude Code sessions where brew git is confirmed installed.
+
 ### Shell testing requires correct flags
 
 | Shell | Flags | Why |
