@@ -223,6 +223,10 @@ cask "iterm2"   # optional
 
 Trade-off: simpler install, but loses the per-app structured output and verify-after-install pattern that the current script provides. Could be offered as an alternative fast path.
 
+### Evaluate iTerm2 as default terminal
+
+iTerm2 is a popular Terminal.app replacement with split panes, regex search, autocomplete, hotkey window, and per-profile customization. Currently listed as optional in the macOS runbook (Section 6). Worth evaluating whether it should be a recommended default or remain optional. If adopted, consider including a default profile/preferences export in the repo.
+
 ### Dotfile management
 
 The runbooks touch several dotfiles (`~/.zshrc`, `~/.bash_profile`, `~/.zprofile`). Currently, each script appends to them independently. As the number of tools that modify dotfiles grows, consider:
