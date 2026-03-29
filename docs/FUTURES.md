@@ -22,7 +22,7 @@ conda-env-runbook.md        — Shared, with platform-specific callouts where ne
 
 Most deterministic runbook steps have been extracted into standalone idempotent scripts with structured output.
 
-**Windows (7 scripts):**
+**Windows (8 scripts):**
 
 | Script | Status |
 |--------|--------|
@@ -31,15 +31,17 @@ Most deterministic runbook steps have been extracted into standalone idempotent 
 | `fix-path-registry.ps1` | Done |
 | `micromamba-shell-init.ps1` | Done |
 | `remove-conda.ps1` | Done |
+| `create-env.ps1` | Done |
 | `verify-prerequisites.ps1` | Done |
 | `verify-shell-integration.ps1` | Done |
 
-**macOS (4 scripts):**
+**macOS (5 scripts):**
 
 | Script | Status |
 |--------|--------|
 | `prepare-for-runbooks.sh` | Done |
 | `install-apps.sh` | Done |
+| `create-env.sh` | Done |
 | `verify-prerequisites.sh` | Done |
 | `verify-shell-integration.sh` | Done |
 
@@ -58,15 +60,9 @@ A script would:
 - Strip `# >>> conda initialize >>>` blocks from `~/.zshrc` and `~/.bash_profile`
 - Verify removal
 
-### Cross-platform: `create-env.sh` / `create-env.ps1`
+### ~~Cross-platform: `create-env.sh` / `create-env.ps1`~~ — Done
 
-Environment creation is currently inline in the runbook (`micromamba create -n node1 ...`). A script could:
-- Accept an environment name and package list as parameters
-- Check if the environment already exists (skip or recreate)
-- Create the environment and verify all packages
-- Output structured results
-
-This becomes more valuable when combined with environment spec files (see below).
+Both scripts accept environment name, package list (or YAML spec file), and a recreate flag. They check for existing environments, create with verification, and output structured results. Runbook Section 3 updated to reference them.
 
 ### macOS: `micromamba-shell-init.sh`
 

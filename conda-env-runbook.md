@@ -213,25 +213,53 @@ rm -rf ~/envs-backup
 
 Creates a new environment named `node1` with all required packages from conda-forge.
 
-### 3a. Create the environment
-```sh
-micromamba create -n node1 -c conda-forge nodejs python gh -y
-```
-
 > 📝 **Package notes:**
 > - `nodejs` — installs Node.js and npm
 > - `python` — latest stable Python
 > - `gh` — GitHub CLI
 > - `git` is intentionally omitted — Git should be installed system-wide and available everywhere, including inside this environment
 
-### 3b. Activate and verify
+### Windows
+
+> 📝 **Script available:**
+> ```bash
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/create-env.ps1 -Name node1 -Packages nodejs,python,gh
+> ```
+> The script checks if the environment already exists (skips if so), creates it, and verifies all packages. Use `-Recreate` to replace an existing environment. Supports `-SpecFile` for YAML spec files.
+
+<details>
+<summary>Manual steps (if not using the script)</summary>
+
 ```sh
+micromamba create -n node1 -c conda-forge nodejs python gh -y
 micromamba activate node1
 node --version
 python --version
-git --version
 gh --version
 ```
+
+</details>
+
+### macOS
+
+> 📝 **Script available:**
+> ```bash
+> bash scripts/mac/create-env.sh --name node1 --packages nodejs,python,gh
+> ```
+> The script checks if the environment already exists (skips if so), creates it, and verifies all packages. Use `--recreate` to replace an existing environment. Supports `--spec-file` for YAML spec files.
+
+<details>
+<summary>Manual steps (if not using the script)</summary>
+
+```sh
+micromamba create -n node1 -c conda-forge nodejs python gh -y
+micromamba activate node1
+node --version
+python --version
+gh --version
+```
+
+</details>
 
 ---
 
