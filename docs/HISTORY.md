@@ -1,5 +1,37 @@
 # Change History
 
+## 2026-03-29 — macOS scripts aligned with Windows best practices
+
+Reviewed all macOS scripts against the patterns established in the Windows scripts and applied the same conventions.
+
+### `scripts/mac/prepare-for-runbooks.sh` — structured output
+
+Replaced emoji output prefixes (✅/❌/⏳) with the standard `OK/FAIL/INFO/SKIP/WARN` structured output format used by all Windows scripts. Added `FAIL_COUNT` tracking and a summary exit section. Updated the shebang to `#!/usr/bin/env bash` and added a standard script header with Usage/Output/Exit code documentation.
+
+### `scripts/mac/verify-shell-integration.sh` — micromamba-only
+
+Removed all `conda activate` tests. The user uses micromamba exclusively (conda has been fully removed), so testing conda was producing guaranteed FAILs. Now matches the Windows version which only tests micromamba. Updated the summary table to a single `micromamba activate` column.
+
+### `scripts/mac/verify-prerequisites.sh` — micromamba-only, canonical path fallback
+
+Flipped the conda check: instead of treating it as required (`FAIL: conda not found`), now warns if conda is present since it should have been removed. Removed the `envs_dirs` alignment check between conda and micromamba configs (no longer relevant). Added canonical path fallback for micromamba — checks the brew cellar at `/opt/homebrew/opt/micromamba/bin/micromamba` when neither `MAMBA_EXE` nor `command -v` find it (matches the Windows pattern of checking canonical install paths).
+
+### New script: `scripts/mac/install-apps.sh`
+
+Created the macOS equivalent of `install-apps.ps1` — an idempotent script that installs Git, GitHub Desktop, VS Code, and Chrome via Homebrew. Features:
+
+- Data-driven app definitions (type, brew ID, verify command, canonical path)
+- CLI check first (fast), then `brew list` fallback, matching the Windows two-tier detection
+- Canonical path fallback for freshly installed CLI tools not yet on PATH
+- Verify-after-install for CLI tools
+- Standard structured output (OK/SKIP/FAIL/INFO/WARN)
+
+### `setup-runbook-mac.md` — consolidated app install, manual steps at end
+
+Replaced individual brew install sections (2–5) with a single section pointing to `install-apps.sh`, matching the Windows runbook pattern. Moved manual sign-in steps (GitHub Desktop, Chrome) to a new "Post-Setup Manual Checklist" section at the end so the automated flow isn't interrupted. Added a quick-check command at the top (`verify-prerequisites.sh`). Updated the Status Tracker to reflect the new structure.
+
+---
+
 ## 2026-03-29 — Robustness and prompt-reduction improvements
 
 Ran the full Windows setup runbook end-to-end and identified several friction points where scripts gave false negatives, left steps as manual, or interrupted the automated flow with unnecessary prompts. Made the following changes:

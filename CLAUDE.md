@@ -8,9 +8,9 @@ A collection of runbooks for setting up development machines from scratch. The r
 
 ```
 setup-runbook-windows.md   — Windows machine setup (apps, tools, shell config)
-setup-runbook-mac.md       — macOS machine setup (placeholder, in development)
+setup-runbook-mac.md       — macOS machine setup (apps, tools, shell config)
 conda-env-runbook.md       — Micromamba setup, conda removal (shared across platforms)
-FUTURES.md                 — Planned improvements and architectural decisions
+docs/FUTURES.md            — Planned improvements and architectural decisions
 scripts/windows/           — PowerShell automation scripts for Windows setup
 scripts/mac/               — Shell automation scripts for macOS setup
 ```
@@ -42,7 +42,7 @@ These caused real issues during development and are documented in the runbooks, 
 
 - Uses **micromamba only** — conda has been fully removed. Do not install or reference conda.
 - Wants runbooks that work on **both Windows and macOS**. Platform-specific setup runbooks stay separate; the micromamba runbook is shared with platform callouts.
-- Wants deterministic steps to eventually become **standalone scripts** (idempotent, structured output, no interactivity). See FUTURES.md.
+- Wants deterministic steps to eventually become **standalone scripts** (idempotent, structured output, no interactivity). See docs/FUTURES.md.
 - Wants runbooks to be **living documents** — when you hit a problem and find a fix, update the runbook so the next run doesn't hit it again.
 
 ## When updating runbooks

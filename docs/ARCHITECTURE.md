@@ -16,7 +16,7 @@ scripts/windows/*.ps1          — PowerShell automation scripts
 scripts/mac/*.sh               — Bash automation scripts
 docs/                          — Architecture and change history
 CLAUDE.md                      — Operator guide for Claude Code
-FUTURES.md                     — Roadmap and planned improvements
+docs/FUTURES.md                — Roadmap and planned improvements
 ```
 
 ### Execution flow
@@ -35,12 +35,13 @@ FUTURES.md                     — Roadmap and planned improvements
 
 **macOS:**
 1. Homebrew install
-2. Git, GitHub Desktop, VS Code, Chrome via `brew install`
+2. `install-apps.sh` — Git, GitHub Desktop, VS Code, Chrome via brew (idempotent)
 3. iTerm2, shell customization (optional)
 4. Micromamba via `brew install micromamba`
 5. `micromamba shell init` for zsh and bash
 6. Environment creation
 7. `verify-shell-integration.sh` — confirm zsh and bash work
+8. Post-setup manual sign-ins (GitHub Desktop, Chrome)
 
 ### Callout markers
 

@@ -2,6 +2,11 @@
 
 > **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the setup runbook at setup-runbook-mac.md. Walk me through each section, automate what you can, and tell me when I need to do something manually. Be aware we may be using a machine where some components are already installed. And may be installed through an alternative means than described in the runbook. We need to decide how to handle them."*
 
+> 📝 **Quick check:** Run `scripts/mac/verify-prerequisites.sh` to see what's already installed before starting:
+> ```bash
+> bash scripts/mac/verify-prerequisites.sh
+> ```
+
 ---
 
 ## Section 1 — Homebrew
@@ -36,76 +41,31 @@ brew --version
 
 ---
 
-## Section 2 — Git (via Homebrew)
+## Sections 2–5 — Install Dev Tools
 
-**Installs:** The latest Git, replacing the older Apple Git that ships with Xcode CLI tools.
+Installs Git, GitHub Desktop, VS Code, and Chrome via a single idempotent script. Already-installed apps are skipped.
 
-### 2a. Install via Homebrew
+### Run the install script
 
-```zsh
-brew install git
+```bash
+bash scripts/mac/install-apps.sh
 ```
 
-### 2b. Verify
+> ⚠️ **Manual step:** After the script completes, open a new terminal so PATH changes take effect.
 
-```zsh
-git --version
-which git
-```
+> 📝 **What the script installs:**
+>
+> | App | Brew ID | Type | Verify command |
+> |-----|---------|------|----------------|
+> | Git | `git` | formula | `git --version` |
+> | GitHub Desktop | `github` | cask | *(GUI app)* |
+> | Visual Studio Code | `visual-studio-code` | cask | `code --version` |
+> | Google Chrome | `google-chrome` | cask | *(GUI app)* |
 
-> ⚠️ **Claude Code note:** After install, verify that `which git` points to `/opt/homebrew/bin/git` (Apple Silicon) or `/usr/local/bin/git` (Intel), **not** `/usr/bin/git` (Apple Git). If it still shows Apple Git, the user may need to open a new terminal so the updated PATH takes effect. Homebrew's paths should take precedence over `/usr/bin` in the default macOS PATH.
-
-> 📝 **What you get:**
-> - Latest `git` CLI available in any terminal
-> - **Git Credential Manager** is not included — GitHub credentials are handled by `gh auth login` or by GitHub Desktop's built-in credential management
-
----
-
-## Section 3 — GitHub Desktop
-
-### 3a. Install via Homebrew
-
-```zsh
-brew install --cask github
-```
-
-### 3b. Verify
-
-> ⚠️ **Manual step:** GitHub Desktop is a GUI app — after install, launch it from the Applications folder (or Spotlight) and sign in with your GitHub account.
-
----
-
-## Section 4 — Visual Studio Code
-
-### 4a. Install via Homebrew
-
-```zsh
-brew install --cask visual-studio-code
-```
-
-### 4b. Verify
-
-```zsh
-code --version
-```
-
-> ⚠️ **Claude Code note:** If `code` is not found after install, the user needs to install the shell command. Open VS Code → press `Cmd+Shift+P` → type "Shell Command: Install 'code' command in PATH" → run it. Then open a new terminal.
-
-> 📝 **VS Code + Conda integration:** Once the `node1` environment is created (see conda-env-runbook.md), you can select it as your Python interpreter inside VS Code. Open any `.py` file, click the interpreter selector in the bottom status bar, and choose `node1` from the list.
-
----
-
-## Section 5 — Google Chrome
-
-### 5a. Install via Homebrew
-
-```zsh
-brew install --cask google-chrome
-```
-
-### 5b. Verify
-
-> ⚠️ **Manual step:** Launch Chrome from the Applications folder and sign in with your Google account to restore bookmarks, extensions, and saved passwords.
+> 📝 **Notes:**
+> - **Git via Homebrew** replaces the older Apple Git that ships with Xcode CLI tools. Verify that `which git` points to `/opt/homebrew/bin/git` (Apple Silicon) or `/usr/local/bin/git` (Intel), **not** `/usr/bin/git`.
+> - **VS Code:** If `code` is not found after install, open VS Code → `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH" → run it.
+> - **VS Code + micromamba:** Once the `node1` environment is created (see conda-env-runbook.md), select it as your Python interpreter — open a `.py` file, click the interpreter selector in the status bar, and choose `node1`.
 
 ---
 
@@ -171,13 +131,23 @@ setopt PROMPT_SUBST
 PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 ```
 
-> ⚠️ **Claude Code note:** Before writing to `~/.zshrc`, check if it already exists and has content. If it does, append rather than overwrite — conda/micromamba init may have already added lines to it.
+> ⚠️ **Claude Code note:** Before writing to `~/.zshrc`, check if it already exists and has content. If it does, append rather than overwrite — micromamba init may have already added lines to it.
 
 ---
 
-## Section 8 — Conda, Micromamba & Environments
+## Section 8 — Micromamba & Environments
 
-> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Miniconda, Micromamba, shell configuration, and creating environments. That runbook covers both Windows and macOS with platform-specific callouts.
+> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Micromamba, shell configuration, and creating environments. That runbook covers both Windows and macOS with platform-specific callouts.
+
+---
+
+## Post-Setup Manual Checklist
+
+> ⚠️ **Manual step:** These sign-ins can't be automated. Complete them when convenient.
+
+- [ ] **GitHub Desktop** — Launch from Applications, sign in with your GitHub account
+- [ ] **Chrome** — Launch from Applications, sign in with your Google account to restore bookmarks, extensions, and saved passwords
+- [ ] **iTerm2** — If installed, launch and configure Nerd Font if desired
 
 ---
 
@@ -188,7 +158,7 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 | `brew` not found after install (Apple Silicon) | Add `eval "$(/opt/homebrew/bin/brew shellenv)"` to `~/.zprofile` and open a new terminal |
 | `git --version` shows Apple Git after brew install | Open a new terminal — Homebrew's `/opt/homebrew/bin` should take PATH precedence over `/usr/bin` |
 | `code` command not found after VS Code install | Open VS Code → `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH" |
-| Conda/Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
 
 ---
 
@@ -198,14 +168,11 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 
 - [ ] Homebrew installed
 - [ ] Homebrew on PATH verified (`brew --version`)
-- [ ] Git installed via Homebrew
-- [ ] Git verified (`git --version`, correct path)
-- [ ] GitHub Desktop installed
-- [ ] GitHub Desktop signed in (manual)
-- [ ] VS Code installed
+- [ ] Dev tools installed via `install-apps.sh` (Git, GitHub Desktop, VS Code, Chrome)
+- [ ] Git verified (`git --version`, correct path — not Apple Git)
 - [ ] VS Code verified (`code --version`)
-- [ ] Chrome installed
-- [ ] Chrome signed in (manual)
 - [ ] iTerm2 installed (if chosen)
 - [ ] Shell configured (zsh)
-- [ ] Conda & Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] GitHub Desktop signed in (manual)
+- [ ] Chrome signed in (manual)
