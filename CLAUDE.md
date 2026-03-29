@@ -9,7 +9,7 @@ A collection of runbooks for setting up development machines from scratch. The r
 ```
 setup-runbook-windows.md   — Windows machine setup (apps, tools, shell config)
 setup-runbook-mac.md       — macOS machine setup (placeholder, in development)
-conda-env-runbook.md       — Conda & Micromamba setup (shared across platforms)
+conda-env-runbook.md       — Micromamba setup, conda removal (shared across platforms)
 FUTURES.md                 — Planned improvements and architectural decisions
 scripts/windows/           — Future automation scripts for Windows
 scripts/mac/               — Future automation scripts for macOS
@@ -36,16 +36,13 @@ These caused real issues during development and are documented in the runbooks, 
 - **PATH changes don't take effect in the current shell.** After modifying PATH, the user needs to open a new terminal. Don't tell them to "restart the terminal" if they don't have one open — be specific about what they need to do.
 - **The Windows user PATH registry key must be `REG_EXPAND_SZ`**, not `REG_SZ`. If it's the wrong type, CMD silently ignores user PATH entries. Always verify after modifying PATH.
 - **Micromamba's CMD shell init (`micromamba shell init -s cmd.exe`) mangles paths when run from Git Bash.** Always run it from PowerShell.
-- **Micromamba's installer puts the binary in a location CMD can't reliably access.** Copy it to `miniconda3\Scripts\` as a workaround.
-- **Conda requires ToS acceptance** on first use before any environment can be created. Ask the user before accepting.
-- **Both conda and micromamba auto-activate base**, causing a double `(base)` prompt. Disable one of them.
+- **Conda and micromamba CMD hooks conflict.** Both `conda_hook.bat` and `mamba_hook.bat` guard on `CONDA_SHLVL` — whichever loads second silently exits. The runbook now removes conda entirely to avoid this.
 
 ## User preferences
 
-- Prefers **micromamba over conda** and plans to transition fully to micromamba.
-- Wants runbooks that work on **both Windows and macOS**. Platform-specific setup runbooks stay separate; the conda/micromamba runbook is shared with platform callouts.
+- Uses **micromamba only** — conda has been fully removed. Do not install or reference conda.
+- Wants runbooks that work on **both Windows and macOS**. Platform-specific setup runbooks stay separate; the micromamba runbook is shared with platform callouts.
 - Wants deterministic steps to eventually become **standalone scripts** (idempotent, structured output, no interactivity). See FUTURES.md.
-- Values **consistency** — if conda gets a shell init for all shells, micromamba should too.
 - Wants runbooks to be **living documents** — when you hit a problem and find a fix, update the runbook so the next run doesn't hit it again.
 
 ## When updating runbooks

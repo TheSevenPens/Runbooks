@@ -123,9 +123,9 @@ oh-my-posh font install JetBrainsMono
 
 ---
 
-## Section 8 — Conda, Micromamba & Environments
+## Section 8 — Micromamba & Environments
 
-> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Miniconda, Micromamba, shell configuration, and creating the `node1` environment. This was separated into its own runbook due to the number of platform-specific workarounds involved.
+> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Micromamba, removing Conda (if present), shell configuration, and creating the `node1` environment. This was separated into its own runbook due to the number of platform-specific workarounds involved.
 
 ---
 
@@ -135,7 +135,7 @@ oh-my-posh font install JetBrainsMono
 |---|---|
 | Execution policy blocks scripts | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | `gh` auth needed after install | Run `gh auth login` manually |
-| Conda/Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
 
 ---
 
@@ -155,4 +155,4 @@ oh-my-posh font install JetBrainsMono
 - [ ] PowerShell 7 verified (`pwsh --version`)
 - [ ] Oh My Posh installed (if chosen)
 - [ ] Oh My Posh font configured (if chosen, manual)
-- [ ] Conda & Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
