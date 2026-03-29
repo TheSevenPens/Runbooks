@@ -29,7 +29,7 @@ $Apps = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "Visual Studio Code"; Verify = "code"; VerifyFlag = "--version" },
     @{ Id = "Google.Chrome.EXE";          Name = "Google Chrome";     Verify = $null },
     @{ Id = "Microsoft.WindowsTerminal";  Name = "Windows Terminal";  Verify = $null },
-    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version" }
+    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version"; VerifyPath = "$env:ProgramFiles\PowerShell\7\pwsh.exe" }
 )
 
 # --- Helpers ---
@@ -55,10 +55,14 @@ foreach ($app in $Apps) {
     # CLI-verifiable apps: check command first (faster than winget list)
     if ($app.Verify) {
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
+        if (-not $exe -and $app.VerifyPath -and (Test-Path $app.VerifyPath)) {
+            $exe = Get-Command $app.VerifyPath -ErrorAction SilentlyContinue
+        }
         if ($exe) {
+            $verifyCmd = $exe.Source
             $version = ""
             try {
-                $output = & $app.Verify $app.VerifyFlag 2>&1 | Select-Object -First 1
+                $output = & $verifyCmd $app.VerifyFlag 2>&1 | Select-Object -First 1
                 $version = "$output".Trim()
             } catch {}
             Write-Host "SKIP: $name already installed - $version"
@@ -96,10 +100,14 @@ foreach ($app in $Apps) {
         $env:Path    = "$machinePath;$userPath"
 
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
+        if (-not $exe -and $app.VerifyPath -and (Test-Path $app.VerifyPath)) {
+            $exe = Get-Command $app.VerifyPath -ErrorAction SilentlyContinue
+        }
         if ($exe) {
+            $verifyCmd = $exe.Source
             $version = ""
             try {
-                $output = & $app.Verify $app.VerifyFlag 2>&1 | Select-Object -First 1
+                $output = & $verifyCmd $app.VerifyFlag 2>&1 | Select-Object -First 1
                 $version = "$output".Trim()
             } catch {}
             Write-Host "OK: $name verified - $version"

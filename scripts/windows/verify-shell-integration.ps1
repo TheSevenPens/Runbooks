@@ -79,9 +79,22 @@ Test-ShellActivate -ShellName "PowerShell 5.1" -Executable "powershell.exe" -Arg
 )
 
 # PowerShell 7 - optional, skip if not installed
-Test-ShellActivate -ShellName "PowerShell 7" -Executable "pwsh.exe" -Arguments @(
-    '-Command', '"micromamba activate base; if ($?) { Write-Output ACTIVATE_OK }"'
-)
+# Check canonical install path as fallback since pwsh may not be on PATH yet after a fresh install
+$pwsh7Path = $null
+$pwsh7Cmd = Get-Command pwsh -ErrorAction SilentlyContinue
+if ($pwsh7Cmd) {
+    $pwsh7Path = $pwsh7Cmd.Source
+} elseif (Test-Path "$env:ProgramFiles\PowerShell\7\pwsh.exe") {
+    $pwsh7Path = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+}
+if ($pwsh7Path) {
+    Test-ShellActivate -ShellName "PowerShell 7" -Executable $pwsh7Path -Arguments @(
+        '-Command', '"micromamba activate base; if ($?) { Write-Output ACTIVATE_OK }"'
+    )
+} else {
+    Write-Host "SKIP: PowerShell 7 - pwsh.exe not found"
+    $Results += [PSCustomObject]@{ Shell = "PowerShell 7"; Status = "SKIP" }
+}
 
 # Git Bash - need to find bash.exe
 $gitBashPaths = @(
@@ -106,9 +119,53 @@ if ($bashExe) {
     $Results += [PSCustomObject]@{ Shell = "Git Bash"; Status = "SKIP" }
 }
 
-# CMD - cannot test non-interactively in a reliable way
-Write-Host "INFO: CMD requires manual testing - open CMD and run: micromamba activate base"
-$Results += [PSCustomObject]@{ Shell = "CMD"; Status = "(manual)" }
+# CMD - test via cmd.exe /c which triggers the AutoRun hook automatically
+$autoRunKey = 'HKCU:\Software\Microsoft\Command Processor'
+$autoRun = $null
+try {
+    $autoRun = Get-ItemProperty -Path $autoRunKey -Name AutoRun -ErrorAction Stop |
+        Select-Object -ExpandProperty AutoRun
+} catch {}
+
+if ($autoRun -and $autoRun -match 'mamba_hook\.bat') {
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "cmd.exe"
+        $psi.Arguments = '/c "micromamba activate base && echo ACTIVATE_OK"'
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $stdout = $proc.StandardOutput.ReadToEnd()
+        $stderr = $proc.StandardError.ReadToEnd()
+        $exited = $proc.WaitForExit(30000)
+
+        if (-not $exited) {
+            $proc.Kill()
+            Write-Host "FAIL: CMD - timed out after 30000ms"
+            $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
+            $FailCount++
+        } elseif ("$stdout $stderr" -match 'ACTIVATE_OK') {
+            Write-Host "OK: CMD micromamba-activate"
+            $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "OK" }
+        } else {
+            $errLine = ($stderr -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1)
+            if (-not $errLine) { $errLine = ($stdout -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1) }
+            Write-Host "FAIL: CMD micromamba-activate - $errLine"
+            $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
+            $FailCount++
+        }
+    } catch {
+        Write-Host "FAIL: CMD - error: $_"
+        $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
+        $FailCount++
+    }
+} else {
+    Write-Host "SKIP: CMD - AutoRun hook not configured (mamba_hook.bat not found in registry)"
+    $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "SKIP" }
+}
 
 # --- Summary table ---
 

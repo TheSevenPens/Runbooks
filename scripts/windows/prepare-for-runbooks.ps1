@@ -11,6 +11,16 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# --- Ensure execution policy allows local scripts ---
+$currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+if ($currentPolicy -eq 'Restricted' -or $currentPolicy -eq 'Undefined') {
+    Write-Host "Setting execution policy to RemoteSigned for CurrentUser (was: $currentPolicy)..." -ForegroundColor Cyan
+    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+    Write-Host "Execution policy set to RemoteSigned." -ForegroundColor Green
+} else {
+    Write-Host "Execution policy is already '$currentPolicy' - OK." -ForegroundColor Green
+}
+
 $ClaudeBin = Join-Path $env:USERPROFILE '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 

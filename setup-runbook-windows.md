@@ -30,13 +30,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-
 > | Windows Terminal | `Microsoft.WindowsTerminal` | *(GUI app)* |
 > | PowerShell 7 | `Microsoft.PowerShell` | `pwsh --version` |
 
-### Manual follow-ups after install
-
-> ⚠️ **Manual step:** These GUI apps need manual sign-in after install:
-> - **GitHub Desktop** — launch from Start Menu, sign in with GitHub. Git Credential Manager (from Git for Windows) handles credential storage.
-> - **Chrome** — launch from Start Menu, sign in with Google to restore bookmarks, extensions, and passwords.
-> - **Windows Terminal** — launch from Start Menu. Optionally set as default terminal in Settings → System → For developers → Terminal.
-
 > 📝 **Notes:**
 > - **Git for Windows** gives you: `git` CLI in any terminal, Git Bash (right-click → "Open Git Bash here"), and Git Credential Manager.
 > - **VS Code + micromamba:** Once the `node1` environment is created (see Section 8), select it as your Python interpreter in VS Code — open a `.py` file, click the interpreter selector in the status bar, and choose `node1`.
@@ -73,6 +66,15 @@ oh-my-posh font install JetBrainsMono
 
 ---
 
+## Post-Setup Manual Checklist
+
+> ⚠️ **Manual step:** These GUI apps need manual sign-in/configuration after all automated setup is complete:
+> - **GitHub Desktop** — launch from Start Menu, sign in with GitHub. Git Credential Manager (from Git for Windows) handles credential storage.
+> - **Chrome** — launch from Start Menu, sign in with Google to restore bookmarks, extensions, and passwords.
+> - **Windows Terminal** — launch from Start Menu. Optionally set as default terminal in Settings → System → For developers → Terminal.
+
+---
+
 ## Notes & Known Issues
 
 | Issue | Fix |
@@ -97,12 +99,12 @@ oh-my-posh font install JetBrainsMono
 # setup-runbook-windows status
 
 - [ ] Dev tools installed (install-apps.ps1)
-- [ ] GitHub Desktop signed in (manual)
-- [ ] Chrome signed in (manual)
-- [ ] Windows Terminal set as default (manual, optional)
 - [ ] Oh My Posh installed (if chosen)
 - [ ] Oh My Posh font configured (if chosen, manual)
 - [ ] Micromamba setup complete (see conda-env-runbook.md)
+- [ ] GitHub Desktop signed in (manual)
+- [ ] Chrome signed in (manual)
+- [ ] Windows Terminal set as default (manual, optional)
 ```
 
 </details>
