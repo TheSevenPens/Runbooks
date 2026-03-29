@@ -20,12 +20,17 @@
 
 ### Windows
 
+> 📝 **Script available:** Run `scripts/windows/remove-conda.ps1` to automate all Windows steps below (backup, uninstall, cleanup, verification) in one shot:
+> ```bash
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/remove-conda.ps1
+> ```
+
+<details>
+<summary>Manual steps (if not using the script)</summary>
+
 #### 0a. Back up existing environments
 ```powershell
-# List environments first
 conda env list
-
-# Copy envs to a backup location (skip base)
 Copy-Item -Recurse "$env:USERPROFILE\miniconda3\envs" "$env:USERPROFILE\envs-backup"
 ```
 
@@ -35,33 +40,29 @@ winget uninstall --id Anaconda.Miniconda3
 ```
 
 #### 0c. Clean up remaining files
-The winget uninstaller may leave files behind. Remove them:
 ```powershell
 Remove-Item -Recurse -Force "$env:USERPROFILE\miniconda3" -ErrorAction SilentlyContinue
 ```
 
 #### 0d. Clean up shell hooks and PATH
 ```powershell
-# Remove miniconda paths from user PATH
 $key = Get-Item 'HKCU:\Environment'
 $val = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 $parts = $val -split ';' | Where-Object { $_ -ne '' -and $_ -notmatch 'miniconda3' }
 $newPath = $parts -join ';'
 Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value $newPath -Type ExpandString
-
-# Clear CMD AutoRun (micromamba shell init will set it fresh)
 Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Command Processor' -Name AutoRun -ErrorAction SilentlyContinue
-
-# Remove .condarc
 Remove-Item "$env:USERPROFILE\.condarc" -ErrorAction SilentlyContinue
 ```
 
-Remove the conda init block from `~/.bash_profile` and clear the PowerShell profile (`$PROFILE`) of conda hooks. Micromamba shell init (Section 1c) will write fresh hooks.
+Remove the conda init block from `~/.bash_profile` and clear the PowerShell profile of conda hooks.
 
 #### 0e. Verify removal
 ```powershell
 conda --version   # should fail: not recognized
 ```
+
+</details>
 
 ### macOS
 
@@ -102,40 +103,35 @@ Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -U
 >
 > 📝 **Note:** The installer places the binary in `%USERPROFILE%\AppData\Local\micromamba\` and adds that directory to the user PATH.
 
-#### 1b. Verify PATH registry type
-> ⚠️ **Claude Code note:** The user `Path` registry key (`HKCU\Environment\Path`) must be stored as `REG_EXPAND_SZ`, not `REG_SZ`. If it's `REG_SZ`, CMD will silently ignore user PATH entries. Check and fix:
-> ```powershell
-> # Check type
-> (Get-Item 'HKCU:\Environment').GetValueKind('Path')
->
-> # Fix if it shows "String" instead of "ExpandString"
-> $key = Get-Item 'HKCU:\Environment'
-> $val = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
-> Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value $val -Type ExpandString
-> ```
+#### 1b. Fix PATH registry and initialize shell hooks
 
-#### 1c. Initialize micromamba shell hooks for all shells (Windows)
-Initialize micromamba's shell integration for every shell type. **Always run these from PowerShell** (not Git Bash) to ensure correct path handling:
-```powershell
-micromamba shell init -s powershell -r $env:USERPROFILE\micromamba
-micromamba shell init -s bash -r $env:USERPROFILE\micromamba
-micromamba shell init -s cmd.exe -r $env:USERPROFILE\micromamba
-```
-> 📝 **What each does:**
-> - `powershell` — modifies PowerShell 7 and 5.1 profile scripts
-> - `bash` — modifies `~/.bash_profile` (used by Git Bash)
-> - `cmd.exe` — adds a CMD AutoRun hook via the Windows registry (`HKCU\Software\Microsoft\Command Processor\AutoRun`)
->
-> ⚠️ **Claude Code note:** The `cmd.exe` init is sensitive to the working directory — micromamba may treat the `-r` root prefix as a relative path and produce a mangled `AutoRun` value. After running, verify the registry value is correct:
-> ```powershell
-> Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Command Processor' -Name AutoRun | Select-Object -ExpandProperty AutoRun
+> 📝 **Scripts available:** Run these two scripts to handle PATH fixes, shell init, and verification:
+> ```bash
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fix-path-registry.ps1
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/micromamba-shell-init.ps1
 > ```
-> The `mamba_hook.bat` path should point to `C:\Users\<user>\micromamba\condabin\mamba_hook.bat`.
 >
 > ⚠️ **Manual step:** Close and reopen your terminal after running these. If you get an execution policy error, run this first:
 > ```powershell
 > Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 > ```
+
+<details>
+<summary>What the scripts do</summary>
+
+**fix-path-registry.ps1:**
+- Checks that `HKCU\Environment\Path` is `REG_EXPAND_SZ` (not `REG_SZ`), fixes if wrong
+- Removes stale miniconda3 entries from PATH
+- Ensures micromamba's `AppData\Local\micromamba` directory is on PATH
+
+**micromamba-shell-init.ps1:**
+- Runs `micromamba shell init` for powershell, bash, and cmd.exe with root prefix `$env:USERPROFILE\micromamba`
+- Verifies the CMD AutoRun registry value points to `mamba_hook.bat`
+- Verifies `.bash_profile` and PowerShell profile contain micromamba hooks
+
+> ⚠️ **Claude Code note:** The `cmd.exe` init is sensitive to the working directory — micromamba may treat the `-r` root prefix as a relative path and produce a mangled `AutoRun` value. The script runs from PowerShell (not Git Bash) to avoid this, and verifies the result.
+
+</details>
 
 ### macOS
 
@@ -230,12 +226,16 @@ gh --version
 ## Section 4 — Verify Shell Integration
 
 > 🤔 **Claude Code: Always run this verification and show the results to the user as a summary table.**
->
-> 📝 **macOS shortcut:** Run `scripts/mac/verify-shell-integration.sh` to automate all checks below and produce the summary table.
 
 Test that `micromamba activate` works in every shell. Check that the command is recognized (not just that the binary is on PATH — the shell hook must be functional).
 
 ### Windows
+
+> 📝 **Script available:**
+> ```bash
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/verify-shell-integration.ps1
+> ```
+> Tests PowerShell 5.1, PowerShell 7 (if installed), and Git Bash automatically. CMD requires manual testing.
 
 | Shell | Test command | What to check |
 |---|---|---|
@@ -243,6 +243,10 @@ Test that `micromamba activate` works in every shell. Check that the command is 
 | PowerShell 5.1 | `powershell -NoProfile -Command "micromamba activate base"` | Command succeeds without error |
 | CMD | Open CMD → run `micromamba activate base` | Command succeeds without error |
 | Git Bash | Open Git Bash → run `micromamba activate base` | Command succeeds without error |
+
+### macOS
+
+> 📝 **Script available:** Run `scripts/mac/verify-shell-integration.sh` to automate all checks below.
 
 ### macOS
 

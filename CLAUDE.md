@@ -11,8 +11,8 @@ setup-runbook-windows.md   — Windows machine setup (apps, tools, shell config)
 setup-runbook-mac.md       — macOS machine setup (placeholder, in development)
 conda-env-runbook.md       — Micromamba setup, conda removal (shared across platforms)
 FUTURES.md                 — Planned improvements and architectural decisions
-scripts/windows/           — Future automation scripts for Windows
-scripts/mac/               — Future automation scripts for macOS
+scripts/windows/           — PowerShell automation scripts for Windows setup
+scripts/mac/               — Shell automation scripts for macOS setup
 ```
 
 ## How to run a runbook
