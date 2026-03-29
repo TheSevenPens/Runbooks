@@ -17,6 +17,8 @@
 ## Section 0 — Remove Conda (if installed)
 
 > ⚠️ **Claude Code note:** If Miniconda/Anaconda is already installed, remove it before proceeding. Keeping both conda and micromamba causes CMD shell hook conflicts — both `conda_hook.bat` and `mamba_hook.bat` use an `IF DEFINED CONDA_SHLVL GOTO :EOF` guard, so whichever loads second in the CMD AutoRun chain silently fails.
+>
+> ⚠️ **Claude Code note:** **Check where `micromamba.exe` lives before removing conda.** If micromamba was installed while conda was present, the binary may live inside `miniconda3\Scripts\` rather than the canonical `AppData\Local\micromamba\`. Removing conda in this case deletes the micromamba binary, breaking the `.bat` wrapper and all shell hooks that reference `MAMBA_EXE`. The `remove-conda.ps1` script detects this and reinstalls micromamba to the canonical location automatically, but if running manual steps, reinstall micromamba first.
 
 ### Windows
 
@@ -299,6 +301,8 @@ Present results to the user in this format:
 | `micromamba shell init -s cmd.exe` produces mangled path | Run it from PowerShell, not Git Bash. Verify the AutoRun registry value afterward (see Section 1c) |
 | Execution policy blocks micromamba install | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | CMD AutoRun conflict when both conda and micromamba are installed | Both `conda_hook.bat` and `mamba_hook.bat` use `IF DEFINED CONDA_SHLVL GOTO :EOF` — whichever runs second silently exits. This is why the runbook removes conda first (Section 0) |
+| Removing conda deletes micromamba binary | If `micromamba.exe` lives inside `miniconda3\Scripts\` (not the canonical `AppData\Local\micromamba\`), uninstalling conda removes it. `remove-conda.ps1` now detects this and reinstalls to the canonical location first. If manual, reinstall micromamba before removing conda. |
+| PS7 profile has stale MAMBA_EXE after shell init | `micromamba shell init -s powershell` only writes the PS 5.1 profile. `micromamba-shell-init.ps1` now always syncs the PS7 profile block (replacing, not just checking for presence) and validates the MAMBA_EXE path matches the actual binary. |
 
 ### macOS
 

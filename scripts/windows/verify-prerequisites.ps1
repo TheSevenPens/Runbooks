@@ -85,6 +85,83 @@ if ($mmExe) {
     $FailCount++
 }
 
+# --- MAMBA_EXE consistency check ---
+# Verify that all shell configs point MAMBA_EXE to the same existing binary.
+
+$mambaExeRefs = @{}
+
+# PowerShell profiles
+$psProfilesToScan = @(
+    @{ Name = "PS 5.1 profile"; Path = "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1" },
+    @{ Name = "PS 7 profile";   Path = "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1" }
+)
+foreach ($entry in $psProfilesToScan) {
+    if (Test-Path $entry.Path) {
+        $c = Get-Content $entry.Path -Raw
+        if ($c -match '\$Env:MAMBA_EXE\s*=\s*"([^"]+)"') {
+            $mambaExeRefs[$entry.Name] = $Matches[1]
+        }
+    }
+}
+
+# .bash_profile
+$bpPath = "$env:USERPROFILE\.bash_profile"
+if (Test-Path $bpPath) {
+    $c = Get-Content $bpPath -Raw
+    if ($c -match 'export MAMBA_EXE="([^"]+)"') {
+        $mambaExeRefs[".bash_profile"] = $Matches[1]
+    }
+}
+
+# .bat wrapper
+$batPath = "$env:USERPROFILE\micromamba\condabin\micromamba.bat"
+if (Test-Path $batPath) {
+    $c = Get-Content $batPath -Raw
+    if ($c -match 'MAMBA_EXE=(.+)$') {
+        $mambaExeRefs[".bat wrapper"] = $Matches[1].Trim().Trim('"')
+    }
+}
+
+if ($mambaExeRefs.Count -gt 0) {
+    # Normalize all paths to Windows-style for comparison
+    function ConvertTo-WindowsPath {
+        param([string]$Path)
+        $p = $Path -replace '/', '\'
+        # Convert /c/Users/... to C:\Users\...
+        if ($p -match '^\\([a-zA-Z])\\') {
+            $p = "$($Matches[1].ToUpper()):\$($p.Substring(3))"
+        }
+        return $p
+    }
+
+    $normalizedRefs = @{}
+    foreach ($entry in $mambaExeRefs.GetEnumerator()) {
+        $normalizedRefs[$entry.Key] = ConvertTo-WindowsPath $entry.Value
+    }
+
+    $uniquePaths = $normalizedRefs.Values | Select-Object -Unique
+    $allExist = $true
+    $allMatch = ($uniquePaths.Count -le 1)
+
+    foreach ($entry in $normalizedRefs.GetEnumerator()) {
+        if (-not (Test-Path $entry.Value)) {
+            Write-Host "FAIL: MAMBA_EXE in $($entry.Key) points to non-existent $($mambaExeRefs[$entry.Key])"
+            $FailCount++
+            $allExist = $false
+        }
+    }
+
+    if (-not $allMatch) {
+        Write-Host "WARN: MAMBA_EXE paths differ across shell configs:"
+        foreach ($entry in $mambaExeRefs.GetEnumerator()) {
+            Write-Host "  $($entry.Key): $($entry.Value)"
+        }
+        Write-Host "  Run micromamba-shell-init.ps1 to fix"
+    } elseif ($allExist) {
+        Write-Host "OK: MAMBA_EXE consistent across all shell configs"
+    }
+}
+
 # --- GUI Apps (winget only) ---
 
 Test-WingetPackage -Name "GitHub Desktop" -WingetId "GitHub.GitHubDesktop"

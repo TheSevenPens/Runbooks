@@ -17,26 +17,37 @@ $FailCount = 0
 $RootPrefix = "$env:USERPROFILE\micromamba"
 
 # --- Locate micromamba binary ---
+# Only accept the real .exe, never a .bat wrapper (the wrapper delegates to
+# MAMBA_EXE which may point to a stale location).
 
 $mmExe = $null
 $candidates = @(
     "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
 )
 
-# Also check PATH
+# Also check PATH, but skip .bat wrappers
 $mmCmd = Get-Command micromamba -ErrorAction SilentlyContinue
-if ($mmCmd) { $candidates += $mmCmd.Source }
+if ($mmCmd -and $mmCmd.Source -match '\.exe$') {
+    $candidates += $mmCmd.Source
+}
 
 foreach ($path in $candidates) {
-    if (Test-Path $path) {
+    if ((Test-Path $path) -and $path -match '\.exe$') {
         $mmExe = $path
         break
     }
 }
 
 if (-not $mmExe) {
-    Write-Host "FAIL: micromamba binary not found"
-    Write-Host "  Checked: $($candidates -join ', ')"
+    # Provide a clear message if only .bat was found
+    if ($mmCmd -and $mmCmd.Source -match '\.bat$') {
+        Write-Host "FAIL: Only found .bat wrapper at $($mmCmd.Source) — the actual micromamba.exe is missing"
+        Write-Host "  The .bat wrapper delegates to MAMBA_EXE which may be stale."
+        Write-Host "  Reinstall micromamba: Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -UseBasicParsing).Content)"
+    } else {
+        Write-Host "FAIL: micromamba binary not found"
+        Write-Host "  Checked: $($candidates -join ', ')"
+    }
     exit 1
 }
 
@@ -135,6 +146,7 @@ if (Test-Path $bashProfile) {
 # --- PowerShell 7 profile ---
 # micromamba shell init -s powershell only writes to the 5.1 profile path.
 # If pwsh 7 is installed, copy the init block to its profile too.
+# IMPORTANT: Always overwrite the PS7 block to ensure MAMBA_EXE is current.
 
 Write-Host ""
 Write-Host "--- PowerShell 7 profile ---"
@@ -147,7 +159,7 @@ if ($pwshExe) {
     $ps7Profile = "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
     $ps7Dir     = "$env:USERPROFILE\Documents\PowerShell"
 
-    # Extract the mamba init block from the 5.1 profile
+    # Extract the mamba init block from the 5.1 profile (freshly written by shell init above)
     $initBlock = $null
     if (Test-Path $ps5Profile) {
         $content = Get-Content $ps5Profile -Raw
@@ -157,27 +169,26 @@ if ($pwshExe) {
     }
 
     if ($initBlock) {
-        # Check if pwsh 7 profile already has it
-        $needsWrite = $true
-        if (Test-Path $ps7Profile) {
-            $ps7Content = Get-Content $ps7Profile -Raw
-            if ($ps7Content -match 'MAMBA_EXE|mamba initialize') {
-                Write-Host "OK: $ps7Profile already contains micromamba hooks"
-                $needsWrite = $false
-            }
+        if (-not (Test-Path $ps7Dir)) {
+            New-Item -ItemType Directory -Path $ps7Dir -Force | Out-Null
         }
 
-        if ($needsWrite) {
-            if (-not (Test-Path $ps7Dir)) {
-                New-Item -ItemType Directory -Path $ps7Dir -Force | Out-Null
-            }
-            # Append or create
-            if (Test-Path $ps7Profile) {
-                Add-Content -Path $ps7Profile -Value "`n$initBlock`n"
+        # Always replace the mamba block in PS7 profile to keep MAMBA_EXE in sync
+        if (Test-Path $ps7Profile) {
+            $ps7Content = Get-Content $ps7Profile -Raw
+            if ($ps7Content -match '(?s)#region mamba initialize.*?#endregion') {
+                # Replace existing block
+                $ps7Content = $ps7Content -replace '(?s)#region mamba initialize.*?#endregion', $initBlock
+                Set-Content -Path $ps7Profile -Value $ps7Content -NoNewline
+                Write-Host "OK: Updated micromamba init block in $ps7Profile"
             } else {
-                Set-Content -Path $ps7Profile -Value "$initBlock`n"
+                # No existing block — append
+                Add-Content -Path $ps7Profile -Value "`n$initBlock`n"
+                Write-Host "OK: Added micromamba init block to $ps7Profile"
             }
-            Write-Host "OK: Copied micromamba init block to $ps7Profile"
+        } else {
+            Set-Content -Path $ps7Profile -Value "$initBlock`n"
+            Write-Host "OK: Created $ps7Profile with micromamba init block"
         }
     } else {
         Write-Host "WARN: Could not find mamba init block in $ps5Profile to copy"
@@ -186,10 +197,11 @@ if ($pwshExe) {
     Write-Host "SKIP: pwsh not installed - no PowerShell 7 profile to configure"
 }
 
-# --- Verify PowerShell profiles ---
+# --- Verify MAMBA_EXE in all profiles ---
+# Don't just check for presence — validate that MAMBA_EXE points to the binary we used.
 
 Write-Host ""
-Write-Host "--- Verifying PowerShell profiles ---"
+Write-Host "--- Verifying MAMBA_EXE paths in profiles ---"
 $psProfiles = @(
     "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
     "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
@@ -198,10 +210,61 @@ $psProfiles = @(
 foreach ($profilePath in $psProfiles) {
     if (Test-Path $profilePath) {
         $content = Get-Content $profilePath -Raw
-        if ($content -match 'MAMBA_EXE|micromamba|mamba_hook') {
+        if ($content -match '\$Env:MAMBA_EXE\s*=\s*"([^"]+)"') {
+            $profileMambaExe = $Matches[1]
+            if ($profileMambaExe -eq $mmExe) {
+                Write-Host "OK: $profilePath MAMBA_EXE matches binary ($mmExe)"
+            } elseif (Test-Path $profileMambaExe) {
+                Write-Host "WARN: $profilePath MAMBA_EXE is $profileMambaExe (differs from $mmExe but exists)"
+            } else {
+                Write-Host "FAIL: $profilePath MAMBA_EXE points to non-existent $profileMambaExe"
+                # Auto-fix: replace with the known-good path
+                $content = $content -replace [regex]::Escape($profileMambaExe), $mmExe
+                Set-Content -Path $profilePath -Value $content -NoNewline
+                Write-Host "  FIXED: Updated to $mmExe"
+                $FailCount++
+            }
+        } elseif ($content -match 'MAMBA_EXE|micromamba|mamba_hook') {
             Write-Host "OK: $profilePath contains micromamba hooks"
         } else {
             Write-Host "WARN: $profilePath exists but has no micromamba hooks"
+        }
+    }
+}
+
+# Verify .bash_profile MAMBA_EXE too
+$bashProfile = "$env:USERPROFILE\.bash_profile"
+if (Test-Path $bashProfile) {
+    $bashContent = Get-Content $bashProfile -Raw
+    if ($bashContent -match 'export MAMBA_EXE="([^"]+)"') {
+        $bashMambaExe = $Matches[1]
+        # Convert bash path to Windows path for comparison
+        $bashMambaExeWin = $bashMambaExe -replace '/', '\'
+        if ($bashMambaExeWin -match '^\\([a-zA-Z])\\') {
+            $bashMambaExeWin = "$($Matches[1]):\$($bashMambaExeWin.Substring(3))"
+        }
+        if (Test-Path $bashMambaExeWin) {
+            Write-Host "OK: .bash_profile MAMBA_EXE points to existing binary"
+        } else {
+            Write-Host "FAIL: .bash_profile MAMBA_EXE points to non-existent $bashMambaExe"
+            $FailCount++
+        }
+    }
+}
+
+# Verify .bat wrapper MAMBA_EXE
+$batWrapper = "$RootPrefix\condabin\micromamba.bat"
+if (Test-Path $batWrapper) {
+    $batContent = Get-Content $batWrapper -Raw
+    if ($batContent -match 'MAMBA_EXE=(.+)$') {
+        $batMambaExe = $Matches[1].Trim().Trim('"')
+        if ($batMambaExe -eq $mmExe) {
+            Write-Host "OK: .bat wrapper MAMBA_EXE matches binary ($mmExe)"
+        } elseif (Test-Path $batMambaExe) {
+            Write-Host "WARN: .bat wrapper MAMBA_EXE is $batMambaExe (differs from $mmExe but exists)"
+        } else {
+            Write-Host "FAIL: .bat wrapper MAMBA_EXE points to non-existent $batMambaExe"
+            $FailCount++
         }
     }
 }

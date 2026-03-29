@@ -42,6 +42,152 @@ if (-not $condaFound) {
 
 Write-Host "INFO: Conda installation detected - starting removal"
 
+# --- Pre-flight: Check if micromamba binary lives inside miniconda3 ---
+# If micromamba.exe is inside the miniconda3 directory, removing conda will break
+# micromamba. We must reinstall it to the canonical location first.
+
+Write-Host ""
+Write-Host "--- Pre-flight: Check micromamba binary location ---"
+$mmCanonical = "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
+$mmNeedsReinstall = $false
+
+# Collect all MAMBA_EXE paths referenced by shell configs
+$mambaExePaths = @()
+
+# Check .bat wrapper
+$batWrapper = "$env:USERPROFILE\micromamba\condabin\micromamba.bat"
+if (Test-Path $batWrapper) {
+    $batContent = Get-Content $batWrapper -Raw
+    if ($batContent -match 'MAMBA_EXE=(.+)$' -or $batContent -match 'MAMBA_EXE="([^"]+)"') {
+        $mambaExePaths += $Matches[1].Trim().Trim('"')
+    }
+}
+
+# Check PowerShell profiles
+$psProfilesToCheck = @(
+    "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
+    "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+)
+foreach ($p in $psProfilesToCheck) {
+    if (Test-Path $p) {
+        $c = Get-Content $p -Raw
+        if ($c -match '\$Env:MAMBA_EXE\s*=\s*"([^"]+)"') {
+            $mambaExePaths += $Matches[1]
+        }
+    }
+}
+
+# Check .bash_profile
+$bashProfile = "$env:USERPROFILE\.bash_profile"
+if (Test-Path $bashProfile) {
+    $c = Get-Content $bashProfile -Raw
+    if ($c -match 'export MAMBA_EXE="([^"]+)"') {
+        $mambaExePaths += $Matches[1]
+    }
+}
+
+# Deduplicate and check if any point inside miniconda3
+$mambaExePaths = $mambaExePaths | Select-Object -Unique
+$staleRefs = @()
+foreach ($ref in $mambaExePaths) {
+    # Normalize forward slashes from bash paths
+    $normalized = $ref -replace '/', '\'
+    # Convert /c/Users/... style bash paths
+    if ($normalized -match '^\\([a-zA-Z])\\') {
+        $normalized = "$($Matches[1]):\$($normalized.Substring(3))"
+    }
+    if ($normalized -match [regex]::Escape($MinicondaDir)) {
+        $staleRefs += $ref
+    }
+}
+
+if ($staleRefs.Count -gt 0) {
+    Write-Host "WARN: micromamba binary is referenced inside miniconda3:"
+    foreach ($ref in $staleRefs) {
+        Write-Host "  $ref"
+    }
+
+    # Check if canonical location already has a working binary
+    if (Test-Path $mmCanonical) {
+        Write-Host "OK: Canonical micromamba already exists at $mmCanonical - will proceed"
+    } else {
+        Write-Host "INFO: Reinstalling micromamba to canonical location before removing conda"
+        try {
+            $installDir = Split-Path $mmCanonical
+            if (-not (Test-Path $installDir)) {
+                New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+            }
+            # Download and install micromamba
+            $installScript = (Invoke-WebRequest -Uri 'https://micro.mamba.pm/install.ps1' -UseBasicParsing).Content
+            Invoke-Expression $installScript
+            if (Test-Path $mmCanonical) {
+                Write-Host "OK: micromamba reinstalled to $mmCanonical"
+                $mmNeedsReinstall = $false
+            } else {
+                Write-Host "FAIL: Could not reinstall micromamba - aborting conda removal to avoid breaking micromamba"
+                Write-Host "  Manually install micromamba first, then re-run this script"
+                exit 1
+            }
+        } catch {
+            Write-Host "FAIL: Could not reinstall micromamba - $($_.Exception.Message)"
+            Write-Host "  Manually install micromamba first, then re-run this script"
+            exit 1
+        }
+    }
+
+    # Update shell configs to point to canonical location before deleting miniconda3
+    Write-Host "INFO: Updating MAMBA_EXE references in shell configs"
+    $canonicalPath = $mmCanonical
+
+    # Fix .bat wrapper
+    if (Test-Path $batWrapper) {
+        $batContent = Get-Content $batWrapper -Raw
+        foreach ($ref in $staleRefs) {
+            $batContent = $batContent -replace [regex]::Escape($ref), $canonicalPath
+        }
+        Set-Content -Path $batWrapper -Value $batContent -NoNewline
+        Write-Host "OK: Updated .bat wrapper MAMBA_EXE"
+    }
+
+    # Fix PowerShell profiles
+    foreach ($p in $psProfilesToCheck) {
+        if (Test-Path $p) {
+            $c = Get-Content $p -Raw
+            $changed = $false
+            foreach ($ref in $staleRefs) {
+                if ($c -match [regex]::Escape($ref)) {
+                    $c = $c -replace [regex]::Escape($ref), $canonicalPath
+                    $changed = $true
+                }
+            }
+            if ($changed) {
+                Set-Content -Path $p -Value $c -NoNewline
+                Write-Host "OK: Updated MAMBA_EXE in $p"
+            }
+        }
+    }
+
+    # Fix .bash_profile
+    if (Test-Path $bashProfile) {
+        $c = Get-Content $bashProfile -Raw
+        $changed = $false
+        foreach ($ref in $staleRefs) {
+            # Handle both Windows and bash-style paths
+            $bashCanonical = $canonicalPath -replace '\\', '/' -replace '^([A-Za-z]):', '/`$1'
+            # Actually use the lowercase drive letter format: /c/Users/...
+            $bashCanonical = ($canonicalPath -replace '\\', '/') -replace '^([A-Za-z]):', { '/' + $_.Groups[1].Value.ToLower() }
+            if ($c -match [regex]::Escape($ref)) {
+                $c = $c -replace [regex]::Escape($ref), $bashCanonical
+                $changed = $true
+            }
+        }
+        if ($changed) {
+            Set-Content -Path $bashProfile -Value $c -NoNewline
+            Write-Host "OK: Updated MAMBA_EXE in .bash_profile"
+        }
+    }
+}
+
 # --- Step 1: Back up environments ---
 
 Write-Host ""
