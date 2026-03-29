@@ -310,9 +310,17 @@ Present results to the user in this format:
 
 ## Status Tracker
 
-> Claude Code: Reset these checkboxes before starting a new run. Check them off as each step completes.
+> ⚠️ **Claude Code note:** Do NOT track status in this file — it lives in git and is shared across machines. Instead, create/update a local checklist at `~/Documents/runbook-status/conda-env-runbook.md`. At the start of each run:
+> 1. Create the directory and file if they don't exist (use the template below for the current platform).
+> 2. Reset all checkboxes to `[ ]`.
+> 3. Check off items as each step completes.
 
-### Windows
+<details>
+<summary>Windows checklist template</summary>
+
+```markdown
+# conda-env-runbook status — Windows
+
 - [ ] Conda removed (if previously installed)
 - [ ] Environments backed up (if migrating from conda)
 - [ ] Conda shell hooks and PATH entries cleaned up
@@ -327,8 +335,16 @@ Present results to the user in this format:
 - [ ] node verified in node1
 - [ ] python verified in node1
 - [ ] gh verified in node1
+```
 
-### macOS
+</details>
+
+<details>
+<summary>macOS checklist template</summary>
+
+```markdown
+# conda-env-runbook status — macOS
+
 - [ ] Conda removed (if previously installed)
 - [ ] Environments backed up (if migrating from conda)
 - [ ] Conda shell hooks cleaned up
@@ -341,3 +357,6 @@ Present results to the user in this format:
 - [ ] node verified in node1
 - [ ] python verified in node1
 - [ ] gh verified in node1
+```
+
+</details>

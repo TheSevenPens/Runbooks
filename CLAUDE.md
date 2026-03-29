@@ -26,7 +26,7 @@ The user will tell you which runbook to follow. When executing one:
    - `🤔 Claude Code: Ask the user` — use AskUserQuestion before proceeding
    - `📝 Note` — informational, no action needed
    - `⚠️ Claude Code note` — guidance for you about known pitfalls
-4. **Use the Status Tracker.** Check off items as you complete them. Reset checkboxes at the start of a new run.
+4. **Use the Status Tracker.** Each runbook has a Status Tracker section with a checklist template. Create/update the checklist as a local file in `~/Documents/runbook-status/` (not in the repo) so it doesn't conflict across machines. Reset checkboxes at the start of a new run.
 5. **When something goes wrong**, document the fix in the runbook's Known Issues table and update the relevant steps so the next run avoids the problem.
 
 ## Key lessons learned (Windows)
