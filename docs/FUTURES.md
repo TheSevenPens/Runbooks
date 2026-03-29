@@ -143,6 +143,14 @@ Created `scripts/mac/remove-conda.sh` with full parity. Updated conda-env-runboo
 
 Windows script renamed from `verify-installed.ps1` to `verify-prerequisites.ps1` to match macOS.
 
+### ~~Removing conda deletes micromamba binary if it lives inside miniconda3~~ — Fixed ([#5](https://github.com/TheSevenPens/Runbooks/issues/5))
+
+`remove-conda.ps1` now detects `MAMBA_EXE` references inside `miniconda3\`, reinstalls micromamba to the canonical location, and updates all shell configs before proceeding with removal.
+
+### ~~PS7 profile retains stale MAMBA_EXE after shell init~~ — Fixed ([#6](https://github.com/TheSevenPens/Runbooks/issues/6))
+
+`micromamba-shell-init.ps1` now always replaces (not skips) the PS7 init block and validates `MAMBA_EXE` paths across all profiles. `verify-prerequisites.ps1` gained a MAMBA_EXE consistency check.
+
 ---
 
 ## Ideas to explore
