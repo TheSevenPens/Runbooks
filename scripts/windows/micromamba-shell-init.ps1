@@ -132,13 +132,67 @@ if (Test-Path $bashProfile) {
     $FailCount++
 }
 
-# --- Verify PowerShell profile ---
+# --- PowerShell 7 profile ---
+# micromamba shell init -s powershell only writes to the 5.1 profile path.
+# If pwsh 7 is installed, copy the init block to its profile too.
 
 Write-Host ""
-Write-Host "--- Verifying PowerShell profile ---"
+Write-Host "--- PowerShell 7 profile ---"
+$pwshExe = Get-Command pwsh -ErrorAction SilentlyContinue
+if (-not $pwshExe -and (Test-Path "$env:ProgramFiles\PowerShell\7\pwsh.exe")) {
+    $pwshExe = Get-Item "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+}
+if ($pwshExe) {
+    $ps5Profile = "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1"
+    $ps7Profile = "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    $ps7Dir     = "$env:USERPROFILE\Documents\PowerShell"
+
+    # Extract the mamba init block from the 5.1 profile
+    $initBlock = $null
+    if (Test-Path $ps5Profile) {
+        $content = Get-Content $ps5Profile -Raw
+        if ($content -match '(?s)(#region mamba initialize.*?#endregion)') {
+            $initBlock = $Matches[1]
+        }
+    }
+
+    if ($initBlock) {
+        # Check if pwsh 7 profile already has it
+        $needsWrite = $true
+        if (Test-Path $ps7Profile) {
+            $ps7Content = Get-Content $ps7Profile -Raw
+            if ($ps7Content -match 'MAMBA_EXE|mamba initialize') {
+                Write-Host "OK: $ps7Profile already contains micromamba hooks"
+                $needsWrite = $false
+            }
+        }
+
+        if ($needsWrite) {
+            if (-not (Test-Path $ps7Dir)) {
+                New-Item -ItemType Directory -Path $ps7Dir -Force | Out-Null
+            }
+            # Append or create
+            if (Test-Path $ps7Profile) {
+                Add-Content -Path $ps7Profile -Value "`n$initBlock`n"
+            } else {
+                Set-Content -Path $ps7Profile -Value "$initBlock`n"
+            }
+            Write-Host "OK: Copied micromamba init block to $ps7Profile"
+        }
+    } else {
+        Write-Host "WARN: Could not find mamba init block in $ps5Profile to copy"
+    }
+} else {
+    Write-Host "SKIP: pwsh not installed - no PowerShell 7 profile to configure"
+}
+
+# --- Verify PowerShell profiles ---
+
+Write-Host ""
+Write-Host "--- Verifying PowerShell profiles ---"
 $psProfiles = @(
     "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
-    "$env:USERPROFILE\Documents\PowerShell\profile.ps1"
+    "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
 )
 
 foreach ($profilePath in $psProfiles) {

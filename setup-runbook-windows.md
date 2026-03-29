@@ -8,100 +8,39 @@
 
 ---
 
-## Section 1 — Git for Windows
+## Sections 1–6 — Install Dev Tools
 
-**Installs:** Git CLI, Git Bash terminal, Git Credential Manager, and Explorer shell integration.
+Installs Git for Windows, GitHub Desktop, VS Code, Chrome, Windows Terminal, and PowerShell 7 via a single idempotent script. Already-installed apps are skipped.
 
-### 1a. Install via Winget
-```powershell
-winget install -e --id Git.Git --silent
+### Run the install script
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-apps.ps1
 ```
 
-### 1b. Verify
-```powershell
-git --version
-```
+> ⚠️ **Manual step:** After the script completes, close and reopen your terminal so PATH changes take effect.
 
-> ⚠️ **Manual step:** After install, close and reopen your terminal so the updated PATH takes effect.
+> 📝 **What the script installs:**
+>
+> | App | Winget ID | Verify command |
+> |-----|-----------|----------------|
+> | Git for Windows | `Git.Git` | `git --version` |
+> | GitHub Desktop | `GitHub.GitHubDesktop` | *(GUI app)* |
+> | Visual Studio Code | `Microsoft.VisualStudioCode` | `code --version` |
+> | Google Chrome | `Google.Chrome.EXE` | *(GUI app)* |
+> | Windows Terminal | `Microsoft.WindowsTerminal` | *(GUI app)* |
+> | PowerShell 7 | `Microsoft.PowerShell` | `pwsh --version` |
 
-> 📝 **What you get:**
-> - `git` CLI available in any terminal (PowerShell, CMD, Git Bash)
-> - **Git Bash** — right-click any folder → "Open Git Bash here"
-> - **Git Credential Manager** — handles GitHub credential storage automatically (works with `gh` too)
+### Manual follow-ups after install
 
----
+> ⚠️ **Manual step:** These GUI apps need manual sign-in after install:
+> - **GitHub Desktop** — launch from Start Menu, sign in with GitHub. Git Credential Manager (from Git for Windows) handles credential storage.
+> - **Chrome** — launch from Start Menu, sign in with Google to restore bookmarks, extensions, and passwords.
+> - **Windows Terminal** — launch from Start Menu. Optionally set as default terminal in Settings → System → For developers → Terminal.
 
-## Section 2 — GitHub Desktop
-
-### 2a. Install via Winget
-```powershell
-winget install -e --id GitHub.GitHubDesktop --silent
-```
-
-### 2b. Verify
-> ⚠️ **Manual step:** GitHub Desktop is a GUI app — after install, launch it from the Start Menu and sign in with your GitHub account. Git Credential Manager (installed with Git for Windows in Section 1) will handle credential storage automatically.
-
----
-
-## Section 3 — Visual Studio Code
-
-### 3a. Install via Winget
-```powershell
-winget install -e --id Microsoft.VisualStudioCode --silent
-```
-
-### 3b. Verify
-```powershell
-code --version
-```
-
-> ⚠️ **Manual step:** After install, reopen your terminal so `code` is available on PATH.
-
-> 📝 **VS Code + Conda integration:** Once the `node1` environment is created (see Section 8), you can select it as your Python interpreter inside VS Code. Open any `.py` file, click the interpreter selector in the bottom status bar, and choose `node1` from the list. VS Code will then use that environment's Python for linting, IntelliSense, and the integrated terminal.
-
----
-
-## Section 4 — Google Chrome
-
-### 4a. Install via Winget
-```powershell
-winget install -e --id Google.Chrome --silent
-```
-
-### 4b. Verify
-> ⚠️ **Manual step:** Launch Chrome from the Start Menu and sign in with your Google account to restore bookmarks, extensions, and saved passwords.
-
----
-
-## Section 5 — Windows Terminal
-
-A modern tabbed terminal that replaces the default PowerShell and CMD windows. Supports profiles for PowerShell, Git Bash, conda, and more.
-
-### 5a. Install via Winget
-```powershell
-winget install -e --id Microsoft.WindowsTerminal --silent
-```
-
-### 5b. Verify
-> ⚠️ **Manual step:** Launch Windows Terminal from the Start Menu. It should appear as the default terminal going forward. You can set it as the system default terminal in Settings → System → For developers → Terminal.
-
----
-
-## Section 6 — PowerShell 7
-
-Windows ships with PowerShell 5.1 by default. PowerShell 7 is the modern, cross-platform version with better performance, improved error handling, and active development.
-
-### 6a. Install via Winget
-```powershell
-winget install -e --id Microsoft.PowerShell --silent
-```
-
-### 6b. Verify
-```powershell
-pwsh --version
-```
-
-> 📝 **Note:** PowerShell 7 installs alongside 5.1 — it does not replace it. In Windows Terminal it will appear as a new profile called "PowerShell" (vs the older "Windows PowerShell"). Use `pwsh` to launch it from any terminal.
+> 📝 **Notes:**
+> - **Git for Windows** gives you: `git` CLI in any terminal, Git Bash (right-click → "Open Git Bash here"), and Git Credential Manager.
+> - **VS Code + micromamba:** Once the `node1` environment is created (see Section 8), select it as your Python interpreter in VS Code — open a `.py` file, click the interpreter selector in the status bar, and choose `node1`.
+> - **PowerShell 7** installs alongside 5.1 — it does not replace it. In Windows Terminal it appears as "PowerShell" (vs "Windows PowerShell"). Launch with `pwsh`.
 
 ---
 
@@ -145,19 +84,25 @@ oh-my-posh font install JetBrainsMono
 ---
 
 ## Status Tracker
-> Claude Code: Reset these checkboxes before starting a new run. Check them off as each step completes.
 
-- [ ] Git for Windows installed
-- [ ] Git for Windows verified (`git --version`)
-- [ ] GitHub Desktop installed
+> ⚠️ **Claude Code note:** Do NOT track status in this file — it lives in git and is shared across machines. Instead, create/update a local checklist at `~/Documents/runbook-status/setup-runbook-windows.md`. At the start of each run:
+> 1. Create the directory and file if they don't exist (use the template below).
+> 2. Reset all checkboxes to `[ ]`.
+> 3. Check off items as each step completes.
+
+<details>
+<summary>Checklist template</summary>
+
+```markdown
+# setup-runbook-windows status
+
+- [ ] Dev tools installed (install-apps.ps1)
 - [ ] GitHub Desktop signed in (manual)
-- [ ] VS Code installed
-- [ ] VS Code verified (`code --version`)
-- [ ] Chrome installed
 - [ ] Chrome signed in (manual)
-- [ ] Windows Terminal installed
-- [ ] PowerShell 7 installed
-- [ ] PowerShell 7 verified (`pwsh --version`)
+- [ ] Windows Terminal set as default (manual, optional)
 - [ ] Oh My Posh installed (if chosen)
 - [ ] Oh My Posh font configured (if chosen, manual)
-- [ ] Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] Micromamba setup complete (see conda-env-runbook.md)
+```
+
+</details>
