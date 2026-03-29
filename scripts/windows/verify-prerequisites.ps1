@@ -1,8 +1,8 @@
-# verify-installed.ps1 - Check Windows dev tool prerequisites
+# verify-prerequisites.ps1 - Check Windows dev tool prerequisites
 #
 # Usage:
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-installed.ps1
-#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-installed.ps1 -Env node1
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-prerequisites.ps1
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-prerequisites.ps1 -Env node1
 #
 # Output: Structured lines prefixed with OK / WARN / FAIL / SKIP
 # Exit code: 0 if all required tools present, 1 if any FAIL

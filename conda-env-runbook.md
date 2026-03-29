@@ -66,6 +66,14 @@ conda --version   # should fail: not recognized
 
 ### macOS
 
+> 📝 **Script available:** Run `scripts/mac/remove-conda.sh` to automate all macOS steps below (backup, uninstall, cleanup, verification) in one shot:
+> ```bash
+> bash scripts/mac/remove-conda.sh
+> ```
+
+<details>
+<summary>Manual steps (if not using the script)</summary>
+
 #### 0a. Back up existing environments
 ```zsh
 conda env list
@@ -85,6 +93,8 @@ rm -f ~/.condarc
 
 #### 0d. Clean up shell hooks
 Remove the `# >>> conda initialize >>>` block from `~/.zshrc` and/or `~/.bash_profile`. Micromamba shell init (Section 1b) will write fresh hooks.
+
+</details>
 
 ---
 
@@ -235,7 +245,7 @@ Test that `micromamba activate` works in every shell. Check that the command is 
 > ```bash
 > powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/verify-shell-integration.ps1
 > ```
-> Tests PowerShell 5.1, PowerShell 7 (if installed), and Git Bash automatically. CMD requires manual testing.
+> Tests PowerShell 5.1, PowerShell 7 (if installed), Git Bash, and CMD automatically.
 
 | Shell | Test command | What to check |
 |---|---|---|
@@ -247,8 +257,6 @@ Test that `micromamba activate` works in every shell. Check that the command is 
 ### macOS
 
 > 📝 **Script available:** Run `scripts/mac/verify-shell-integration.sh` to automate all checks below.
-
-### macOS
 
 | Shell | Test command | What to check |
 |---|---|---|

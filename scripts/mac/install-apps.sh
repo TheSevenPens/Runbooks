@@ -12,6 +12,7 @@
 #   - GitHub Desktop (github) [cask]
 #   - Visual Studio Code (visual-studio-code) [cask]
 #   - Google Chrome (google-chrome) [cask]
+#   - GitHub CLI (gh)
 #
 # Output: Structured lines prefixed with OK / SKIP / FAIL / INFO
 # Exit code: 0 on success, 1 on any failure
@@ -28,16 +29,18 @@ if ! command -v brew &>/dev/null; then
 fi
 
 # --- App definitions ---
-# Format: "type|brew_id|display_name|verify_cmd|verify_flag|canonical_path"
+# Format: "type|brew_id|display_name|verify_cmd|verify_flag|canonical_path|app_path"
 # type: formula or cask
 # verify_cmd: CLI command to check (empty string if GUI-only)
 # canonical_path: fallback path if verify_cmd isn't on PATH yet
+# app_path: /Applications/*.app path for GUI apps installed outside brew
 
 APPS=(
-    "formula|git|Git|git|--version|/opt/homebrew/bin/git"
-    "cask|github|GitHub Desktop|||"
-    "cask|visual-studio-code|Visual Studio Code|code|--version|/usr/local/bin/code"
-    "cask|google-chrome|Google Chrome|||"
+    "formula|git|Git|git|--version|/opt/homebrew/bin/git|"
+    "cask|github|GitHub Desktop||||/Applications/GitHub Desktop.app"
+    "cask|visual-studio-code|Visual Studio Code|code|--version|/usr/local/bin/code|/Applications/Visual Studio Code.app"
+    "cask|google-chrome|Google Chrome||||/Applications/Google Chrome.app"
+    "formula|gh|GitHub CLI|gh|--version|/opt/homebrew/bin/gh|"
 )
 
 # --- Helpers ---
@@ -85,7 +88,7 @@ get_version() {
 # --- Main loop ---
 
 for app_def in "${APPS[@]}"; do
-    IFS='|' read -r type brew_id name verify_cmd verify_flag canonical_path <<< "$app_def"
+    IFS='|' read -r type brew_id name verify_cmd verify_flag canonical_path app_path <<< "$app_def"
 
     echo ""
     echo "--- ${name} (${type}: ${brew_id}) ---"
@@ -100,6 +103,12 @@ for app_def in "${APPS[@]}"; do
             echo "SKIP: ${name} already installed — ${version}"
             already_installed=true
         fi
+    fi
+
+    # GUI apps: check /Applications bundle path (catches non-brew installs)
+    if [[ "$already_installed" == false && -n "$app_path" && -d "$app_path" ]]; then
+        echo "SKIP: ${name} already installed (${app_path})"
+        already_installed=true
     fi
 
     # Fallback: check brew list

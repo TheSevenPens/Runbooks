@@ -31,7 +31,7 @@ Most deterministic runbook steps have been extracted into standalone idempotent 
 | `fix-path-registry.ps1` | Done |
 | `micromamba-shell-init.ps1` | Done |
 | `remove-conda.ps1` | Done |
-| `verify-installed.ps1` | Done |
+| `verify-prerequisites.ps1` | Done |
 | `verify-shell-integration.ps1` | Done |
 
 **macOS (4 scripts):**
@@ -127,21 +127,21 @@ This could also be automated — the smoke test script could stamp the date on s
 
 ## Known issues to address
 
-### conda-env-runbook.md has a duplicate `### macOS` header in Section 4
+### ~~conda-env-runbook.md has a duplicate `### macOS` header in Section 4~~ — Fixed ([#1](https://github.com/TheSevenPens/Runbooks/issues/1))
 
-Section 4 (Verify Shell Integration) contains two consecutive `### macOS` headers (around lines 249-253). The first introduces the script reference, the second introduces the manual test table. Should be merged into one section.
+Merged the duplicate headers into a single section.
 
-### Windows verify-shell-integration.ps1 CMD section describes itself as manual in the runbook
+### ~~Windows verify-shell-integration.ps1 CMD section describes itself as manual in the runbook~~ — Fixed ([#2](https://github.com/TheSevenPens/Runbooks/issues/2))
 
-The runbook text at `conda-env-runbook.md` Section 4 still says "CMD requires manual testing" in its table description, but the script now automates CMD testing. The runbook text should be updated to reflect this.
+Updated Section 4 to say the script tests all four shells automatically.
 
-### macOS conda removal has no script parity with Windows
+### ~~macOS conda removal has no script parity with Windows~~ — Fixed ([#3](https://github.com/TheSevenPens/Runbooks/issues/3))
 
-Windows users get a one-command experience (`remove-conda.ps1`). macOS users follow 4 manual steps. This is a friction asymmetry — see "Scripts still to extract" above.
+Created `scripts/mac/remove-conda.sh` with full parity. Updated conda-env-runbook.md to reference it.
 
-### verify-prerequisites naming inconsistency
+### ~~verify-prerequisites naming inconsistency~~ — Fixed ([#4](https://github.com/TheSevenPens/Runbooks/issues/4))
 
-Windows calls it `verify-installed.ps1`, macOS calls it `verify-prerequisites.sh`. They do the same thing. Consider aligning the names, or at least documenting the reason for the difference.
+Windows script renamed from `verify-installed.ps1` to `verify-prerequisites.ps1` to match macOS.
 
 ---
 

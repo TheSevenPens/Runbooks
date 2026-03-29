@@ -43,7 +43,7 @@ brew --version
 
 ## Sections 2–5 — Install Dev Tools
 
-Installs Git, GitHub Desktop, VS Code, and Chrome via a single idempotent script. Already-installed apps are skipped.
+Installs Git, GitHub Desktop, VS Code, Chrome, and GitHub CLI via a single idempotent script. Already-installed apps are skipped.
 
 ### Run the install script
 
@@ -61,6 +61,7 @@ bash scripts/mac/install-apps.sh
 > | GitHub Desktop | `github` | cask | *(GUI app)* |
 > | Visual Studio Code | `visual-studio-code` | cask | `code --version` |
 > | Google Chrome | `google-chrome` | cask | *(GUI app)* |
+| GitHub CLI | `gh` | formula | `gh --version` |
 
 > 📝 **Notes:**
 > - **Git via Homebrew** replaces the older Apple Git that ships with Xcode CLI tools. Verify that `which git` points to `/opt/homebrew/bin/git` (Apple Silicon) or `/usr/local/bin/git` (Intel), **not** `/usr/bin/git`.
@@ -168,7 +169,7 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 
 - [ ] Homebrew installed
 - [ ] Homebrew on PATH verified (`brew --version`)
-- [ ] Dev tools installed via `install-apps.sh` (Git, GitHub Desktop, VS Code, Chrome)
+- [ ] Dev tools installed via `install-apps.sh` (Git, GitHub Desktop, VS Code, Chrome, gh)
 - [ ] Git verified (`git --version`, correct path — not Apple Git)
 - [ ] VS Code verified (`code --version`)
 - [ ] iTerm2 installed (if chosen)
