@@ -1,0 +1,20 @@
+# Brewfile — Declarative app list for macOS setup
+#
+# Usage:
+#   brew bundle --file=apps/Brewfile           # Install all
+#   brew bundle check --file=apps/Brewfile     # Check what's missing
+#   brew bundle list --file=apps/Brewfile      # List packages
+#
+# This is the Homebrew Bundle equivalent of the install-apps.sh script.
+# Both install the same apps — use whichever you prefer:
+#   - install-apps.sh: per-app structured output, verify-after-install
+#   - Brewfile: one-shot declarative install, inherently idempotent
+
+# CLI tools (formulas)
+brew "git"
+brew "gh"
+
+# GUI apps (casks)
+cask "github"
+cask "visual-studio-code"
+cask "google-chrome"

@@ -11,6 +11,7 @@ setup-runbook-windows.md   — Windows machine setup (apps, tools, shell config)
 setup-runbook-mac.md       — macOS machine setup (apps, tools, shell config)
 conda-env-runbook.md       — Micromamba setup, conda removal (shared across platforms)
 docs/FUTURES.md            — Planned improvements and architectural decisions
+apps/                      — Declarative app specs (winget JSON, Brewfile)
 scripts/windows/           — PowerShell automation scripts for Windows setup
 scripts/mac/               — Shell automation scripts for macOS setup
 ```

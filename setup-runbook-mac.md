@@ -51,6 +51,12 @@ Installs Git, GitHub Desktop, VS Code, Chrome, and GitHub CLI via a single idemp
 bash scripts/mac/install-apps.sh
 ```
 
+> 📝 **Alternative: Homebrew Bundle.** For a one-shot declarative install, use the Brewfile instead:
+> ```bash
+> bash scripts/mac/bundle-install.sh
+> ```
+> This reads `apps/Brewfile` and installs all packages via `brew bundle`. Both approaches install the same apps — `install-apps.sh` gives per-app structured output while `bundle-install.sh` is faster for fresh machines.
+
 > ⚠️ **Manual step:** After the script completes, open a new terminal so PATH changes take effect.
 
 > 📝 **What the script installs:**

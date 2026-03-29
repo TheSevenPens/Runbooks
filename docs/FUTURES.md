@@ -22,12 +22,14 @@ conda-env-runbook.md        — Shared, with platform-specific callouts where ne
 
 Most deterministic runbook steps have been extracted into standalone idempotent scripts with structured output.
 
-**Windows (8 scripts):**
+**Windows (10 scripts):**
 
 | Script | Status |
 |--------|--------|
 | `prepare-for-runbooks.ps1` | Done |
 | `install-apps.ps1` | Done |
+| `export-apps.ps1` | Done |
+| `import-apps.ps1` | Done |
 | `fix-path-registry.ps1` | Done |
 | `micromamba-shell-init.ps1` | Done |
 | `remove-conda.ps1` | Done |
@@ -35,15 +37,23 @@ Most deterministic runbook steps have been extracted into standalone idempotent 
 | `verify-prerequisites.ps1` | Done |
 | `verify-shell-integration.ps1` | Done |
 
-**macOS (5 scripts):**
+**macOS (6 scripts):**
 
 | Script | Status |
 |--------|--------|
 | `prepare-for-runbooks.sh` | Done |
 | `install-apps.sh` | Done |
+| `bundle-install.sh` | Done |
 | `create-env.sh` | Done |
 | `verify-prerequisites.sh` | Done |
 | `verify-shell-integration.sh` | Done |
+
+**Shared (declarative app specs):**
+
+| File | Description |
+|------|-------------|
+| `apps/windows.json` | Winget export JSON — used by `import-apps.ps1` |
+| `apps/Brewfile` | Homebrew Bundle file — used by `bundle-install.sh` |
 
 ---
 
@@ -212,20 +222,9 @@ An alternative (or complement) to a shared runtime: formalize the implicit contr
 
 When setting up a second machine, it would be useful to compare what's installed on the new machine vs. an already-configured reference machine. The `verify-prerequisites` script output is structured enough to diff, but there's no tooling to capture a baseline and compare against it.
 
-### Homebrew Bundle for macOS
+### ~~Homebrew Bundle for macOS~~ — Done
 
-Homebrew supports `Brewfile` — a declarative list of everything to install. `brew bundle` installs everything in one shot and is inherently idempotent. This could replace `install-apps.sh` with a simpler approach:
-
-```ruby
-# Brewfile
-brew "git"
-cask "github"
-cask "visual-studio-code"
-cask "google-chrome"
-cask "iterm2"   # optional
-```
-
-Trade-off: simpler install, but loses the per-app structured output and verify-after-install pattern that the current script provides. Could be offered as an alternative fast path.
+Added `apps/Brewfile` and `scripts/mac/bundle-install.sh` as an alternative fast path alongside `install-apps.sh`. Both install the same apps. The Brewfile approach is faster for fresh machines; `install-apps.sh` gives per-app structured output.
 
 ### Evaluate iTerm2 as default terminal
 
@@ -242,6 +241,6 @@ The runbooks touch several dotfiles (`~/.zshrc`, `~/.bash_profile`, `~/.zprofile
 
 The current setup requires shell-specific init hooks. Fish, nushell, and other modern shells aren't covered. If the user adopts a new shell, they need to manually figure out the init command and test it. The `verify-shell-integration` scripts could be extended to detect all installed shells and test them dynamically.
 
-### Windows: winget export/import
+### ~~Windows: winget export/import~~ — Done
 
-Similar to Brewfile, `winget export` can dump installed packages to a JSON file and `winget import` can restore them. Could provide a faster setup path alongside the current script approach.
+Added `scripts/windows/export-apps.ps1`, `scripts/windows/import-apps.ps1`, and `apps/windows.json`. Export generates a winget JSON from the canonical app list; import bulk-installs from it. Offered as an alternative fast path alongside `install-apps.ps1`.

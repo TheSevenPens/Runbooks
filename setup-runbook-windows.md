@@ -17,6 +17,12 @@ Installs Git for Windows, GitHub Desktop, VS Code, Chrome, Windows Terminal, and
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-apps.ps1
 ```
 
+> 📝 **Alternative: winget import.** For a faster bulk install, use the declarative JSON file instead:
+> ```bash
+> powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/import-apps.ps1
+> ```
+> This reads `apps/windows.json` and installs all packages in one shot. Both approaches install the same apps — `install-apps.ps1` gives per-app structured output while `import-apps.ps1` is faster for fresh machines. To regenerate the JSON after changing the app list, run `export-apps.ps1`.
+
 > ⚠️ **Manual step:** After the script completes, close and reopen your terminal so PATH changes take effect.
 
 > 📝 **What the script installs:**
