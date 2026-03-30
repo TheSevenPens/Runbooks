@@ -77,10 +77,14 @@ Write-Host "OK: Exported $($AppIds.Count) packages to $OutFile"
 if (Test-Path $OutFile) {
     try {
         $parsed = Get-Content $OutFile -Raw | ConvertFrom-Json
+        if (-not $parsed -or -not $parsed.Sources -or -not $parsed.Sources[0].Packages) {
+            Write-Host "FAIL: Exported JSON has unexpected structure (missing Sources or Packages)"
+            exit 1
+        }
         $pkgCount = $parsed.Sources[0].Packages.Count
         Write-Host "OK: File is valid JSON with $pkgCount packages"
     } catch {
-        Write-Host "FAIL: Exported file is not valid JSON"
+        Write-Host "FAIL: Exported file is not valid JSON: $($_.Exception.Message)"
         exit 1
     }
 } else {

@@ -47,6 +47,7 @@ function Test-ShellActivate {
 
         if (-not $exited) {
             $proc.Kill()
+            $proc.WaitForExit(5000)
             Write-Host "FAIL: $ShellName - timed out after ${TimeoutMs}ms"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "FAIL" }
             $script:FailCount++
@@ -84,8 +85,15 @@ $pwsh7Path = $null
 $pwsh7Cmd = Get-Command pwsh -ErrorAction SilentlyContinue
 if ($pwsh7Cmd) {
     $pwsh7Path = $pwsh7Cmd.Source
-} elseif (Test-Path "$env:ProgramFiles\PowerShell\7\pwsh.exe") {
-    $pwsh7Path = "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+} else {
+    # Search common install locations as fallback (pwsh may not be on PATH yet)
+    $pwsh7Candidates = @(
+        "$env:ProgramFiles\PowerShell\7\pwsh.exe",
+        "${env:ProgramFiles(x86)}\PowerShell\7\pwsh.exe"
+    )
+    foreach ($candidate in $pwsh7Candidates) {
+        if (Test-Path $candidate) { $pwsh7Path = $candidate; break }
+    }
 }
 if ($pwsh7Path) {
     Test-ShellActivate -ShellName "PowerShell 7" -Executable $pwsh7Path -Arguments @(
@@ -140,11 +148,13 @@ if ($autoRun -and $autoRun -match 'mamba_hook\.bat') {
         $proc = [System.Diagnostics.Process]::Start($psi)
         $stdout = $proc.StandardOutput.ReadToEnd()
         $stderr = $proc.StandardError.ReadToEnd()
-        $exited = $proc.WaitForExit(30000)
+        $cmdTimeout = 30000
+        $exited = $proc.WaitForExit($cmdTimeout)
 
         if (-not $exited) {
             $proc.Kill()
-            Write-Host "FAIL: CMD - timed out after 30000ms"
+            $proc.WaitForExit(5000)
+            Write-Host "FAIL: CMD - timed out after ${cmdTimeout}ms"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
             $FailCount++
         } elseif ("$stdout $stderr" -match 'ACTIVATE_OK') {

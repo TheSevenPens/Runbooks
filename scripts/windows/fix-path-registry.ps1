@@ -17,7 +17,14 @@ $Changed = $false
 # --- Read current state ---
 
 $regKey = Get-Item 'HKCU:\Environment' -ErrorAction Stop
-$currentType = $regKey.GetValueKind('Path')
+try {
+    $currentType = $regKey.GetValueKind('Path')
+} catch {
+    # Path value doesn't exist yet -- create it as REG_EXPAND_SZ with empty value
+    Write-Host "WARN: HKCU\Environment\Path does not exist -- creating it"
+    Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value '' -Type ExpandString
+    $currentType = 'ExpandString'
+}
 $currentValue = $regKey.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 
 # --- Step 1: Fix registry type ---

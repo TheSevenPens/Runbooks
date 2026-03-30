@@ -1,5 +1,68 @@
 # Change History
 
+## 2026-03-30 — Script robustness audit and fixes
+
+Reviewed all 10 Windows PowerShell scripts for robustness and reliability. Fixes applied at three priority levels (critical, high, medium) across 9 scripts.
+
+### Critical fixes
+
+**`remove-conda.ps1` — safe recursive deletion:**
+- `Remove-Item -Recurse -Force` on the miniconda3 directory now validates three conditions before proceeding: the path variable matches the expected `$USERPROFILE\miniconda3`, the path is non-empty, and the directory actually looks like a conda installation (contains `conda-meta`, `Scripts\conda.exe`, or `pkgs`). Previously, a corrupted or empty variable could delete the wrong directory.
+- Backup failure now aborts the entire removal instead of warning and continuing to delete the original.
+- `environments.txt` handling wrapped in `@()` to prevent null vs empty array comparison bugs.
+
+**`create-env.ps1` — exit code checking and ghost environment detection:**
+- All `micromamba env list` and `micromamba list -n` calls now check `$LASTEXITCODE` before parsing output. Previously, a failed command produced empty output that was silently treated as success.
+- Added ghost environment detection: when `env list` shows an environment but the prefix directory doesn't exist on disk, the script now treats it as non-existent and creates fresh. This was a real bug hit during a runbook run.
+- Package list splatting changed from `@packageList` (PowerShell splatting syntax) to explicit `@createArgs` array to avoid issues with special characters.
+
+**`micromamba-shell-init.ps1` — PS5.1 compatibility:**
+- Replaced em-dash characters (`—`) with ASCII double-dashes in all strings and comments. PS5.1 misparses UTF-8 em-dashes in BOM-less files, causing a script-wide parse failure.
+- File saved with UTF-8 BOM so PS5.1 reads it correctly.
+- Added `-Encoding UTF8` to all `Set-Content` and `Add-Content` calls that write profile files.
+
+**`import-apps.ps1` — winget list reliability:**
+- Package detection now checks both `$LASTEXITCODE` and that the package ID appears in the output string (via `[regex]::Escape()`). Some Windows versions return exit code 0 from `winget list` even when the package isn't found.
+- `winget import` output is now parsed and reported: success count, failure count, and non-zero exit code warnings.
+
+**`export-apps.ps1` — JSON validation:**
+- Added structure validation after parsing: checks that `$parsed`, `$parsed.Sources`, and `$parsed.Sources[0].Packages` are non-null before accessing nested properties. Previously, a malformed JSON file would crash with an unhandled null reference.
+
+**`micromamba-shell-init.ps1` — regex escaping in MAMBA_EXE replacement:**
+- Changed from `-replace [regex]::Escape(...)` to `.Replace()` for path substitution. The `-replace` operator treats `$` in the replacement string as a regex backreference, which can silently corrupt paths containing `$` (e.g., usernames).
+
+**`prepare-for-runbooks.ps1` — install script validation:**
+- Downloaded install script is now validated before `Invoke-Expression`: checked for non-empty content and basic PowerShell-like structure. Previously, a network failure returning an empty or HTML error page would be piped directly to `Invoke-Expression`.
+
+### High-priority fixes
+
+**`install-apps.ps1` — hardcoded paths and silent failures:**
+- `VerifyPath` (single path) replaced with `VerifyPaths` (array) to search multiple candidate locations for PowerShell 7, including `Program Files (x86)`.
+- Version check `catch` blocks now log the exception instead of silently swallowing it.
+
+**`verify-shell-integration.ps1` — process cleanup and path search:**
+- Added `$proc.WaitForExit(5000)` after `$proc.Kill()` to ensure timed-out processes are fully terminated before subsequent tests start.
+- PowerShell 7 fallback path search now checks multiple candidates instead of a single hardcoded path.
+- CMD section timeout extracted from hardcoded `30000` to a named variable.
+
+**`fix-path-registry.ps1` — missing Path key:**
+- `GetValueKind('Path')` now wrapped in try-catch. If the `Path` value doesn't exist (possible on fresh installs), the script creates it as `REG_EXPAND_SZ` instead of crashing.
+
+**`remove-conda.ps1` — string replacement safety:**
+- All `-replace [regex]::Escape(...)` calls for path substitution in shell configs changed to `.Replace()` (literal string replacement) to avoid regex special character issues in Windows paths.
+- Bash path conversion rewritten: dead code removed, single clear conversion from `C:\Users\...` to `/c/Users/...`.
+
+**`verify-prerequisites.ps1` — path conversion and error reporting:**
+- `ConvertTo-WindowsPath` now handles WSL-style `/mnt/c/` paths in addition to Git Bash `/c/` style.
+- MAMBA_EXE error messages now include both the original and normalized path when they differ.
+
+### Medium-priority fixes
+
+- `-Encoding UTF8` added to all `Set-Content` calls that write profile files in `remove-conda.ps1`.
+- Consistent use of `.Replace()` over `-replace` for path operations across all scripts that modify shell configs.
+
+---
+
 ## 2026-03-29 — macOS scripts aligned with Windows best practices
 
 Reviewed all macOS scripts against the patterns established in the Windows scripts and applied the same conventions.

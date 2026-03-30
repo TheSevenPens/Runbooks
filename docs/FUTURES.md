@@ -157,6 +157,18 @@ Windows script renamed from `verify-installed.ps1` to `verify-prerequisites.ps1`
 
 `micromamba-shell-init.ps1` now always replaces (not skips) the PS7 init block and validates `MAMBA_EXE` paths across all profiles. `verify-prerequisites.ps1` gained a MAMBA_EXE consistency check.
 
+### Script robustness audit — Fixed (2026-03-30)
+
+Reviewed all 10 Windows scripts for robustness. Key fixes:
+- `remove-conda.ps1` validates path before recursive deletion and aborts on backup failure
+- `create-env.ps1` checks exit codes on all micromamba calls and detects ghost environments
+- `micromamba-shell-init.ps1` fixed PS5.1 parse failure (em-dashes, UTF-8 BOM, encoding)
+- `import-apps.ps1` checks winget output string not just exit code
+- All path substitutions in shell configs use `.Replace()` instead of `-replace` (regex safety)
+- All profile writes use `-Encoding UTF8`
+
+See `docs/HISTORY.md` for the full list of changes across 9 scripts.
+
 ---
 
 ## Ideas to explore

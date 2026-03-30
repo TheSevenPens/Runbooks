@@ -30,7 +30,17 @@ if (Test-Path $ClaudeExe) {
 } else {
     Write-Host "Installing Claude Code..." -ForegroundColor Cyan
     try {
-        Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression
+        $installScript = Invoke-RestMethod https://claude.ai/install.ps1
+        if ([string]::IsNullOrWhiteSpace($installScript)) {
+            Write-Error "Downloaded install script is empty -- network issue or URL may have changed"
+            exit 1
+        }
+        # Basic sanity check: the script should contain PowerShell-like content
+        if ($installScript -notmatch 'param|function|Install|claude' ) {
+            Write-Error "Downloaded content does not look like a PowerShell install script -- URL may have changed"
+            exit 1
+        }
+        $installScript | Invoke-Expression
     } catch {
         Write-Error "Failed to install Claude Code: $_"
         exit 1

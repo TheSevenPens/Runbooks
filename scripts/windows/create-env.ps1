@@ -95,8 +95,18 @@ Write-Host "--- Checking environment ---"
 
 $envExists = $false
 $envList = & $mmExe env list 2>$null
-if ($envList -match "\b$([regex]::Escape($Name))\b") {
-    $envExists = $true
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARN: 'micromamba env list' failed (exit code $LASTEXITCODE) - assuming no environments exist"
+} elseif ($envList -match "\b$([regex]::Escape($Name))\b") {
+    # Verify the environment directory actually exists (guard against ghost entries
+    # where env list shows the name but the prefix directory was deleted)
+    $envPrefix = "$env:USERPROFILE\micromamba\envs\$Name"
+    if (Test-Path $envPrefix) {
+        $envExists = $true
+    } else {
+        Write-Host "WARN: Environment '$Name' appears in env list but directory does not exist at $envPrefix"
+        Write-Host "  Treating as non-existent - will create fresh"
+    }
 }
 
 if ($envExists) {
@@ -120,6 +130,11 @@ if ($envExists) {
 
         # Get installed package names
         $installed = & $mmExe list -n $Name 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "FAIL: 'micromamba list -n $Name' failed (exit code $LASTEXITCODE)"
+            Write-Host "  Environment may be corrupted. Try: -Recreate to rebuild it."
+            exit 1
+        }
         $verifyPackages = $packageList
         if ($SpecFile -ne "") {
             # Parse package names from spec file
@@ -155,7 +170,10 @@ Write-Host "--- Creating environment '$Name' ---"
 if ($SpecFile -ne "") {
     $output = & $mmExe create -n $Name --file $SpecFile -y 2>&1
 } else {
-    $output = & $mmExe create -n $Name -c $channelArg @packageList -y 2>&1
+    # Pass packages as individual arguments (not splatting) to avoid issues with
+    # special characters or empty entries in the package list
+    $createArgs = @('create', '-n', $Name, '-c', $channelArg) + $packageList + @('-y')
+    $output = & $mmExe @createArgs 2>&1
 }
 
 if ($LASTEXITCODE -ne 0) {
@@ -169,7 +187,10 @@ Write-Host "OK: Environment '$Name' created"
 # --- Verify environment exists ---
 
 $envList = & $mmExe env list 2>$null
-if ($envList -match "\b$([regex]::Escape($Name))\b") {
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "FAIL: 'micromamba env list' failed after creation (exit code $LASTEXITCODE)"
+    $FailCount++
+} elseif ($envList -match "\b$([regex]::Escape($Name))\b") {
     Write-Host "OK: Environment '$Name' appears in env list"
 } else {
     Write-Host "FAIL: Environment '$Name' not found after creation"
@@ -182,6 +203,12 @@ Write-Host ""
 Write-Host "--- Verifying packages ---"
 
 $installed = & $mmExe list -n $Name 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "FAIL: 'micromamba list -n $Name' failed (exit code $LASTEXITCODE)"
+    Write-Host "  Cannot verify packages"
+    $FailCount++
+    $installed = $null
+}
 
 $verifyPackages = $packageList
 if ($SpecFile -ne "") {
@@ -194,13 +221,15 @@ if ($SpecFile -ne "") {
     }
 }
 
-foreach ($pkg in $verifyPackages) {
-    if ($installed -match "^\s+$([regex]::Escape($pkg))\s") {
-        $versionLine = $installed | Where-Object { $_ -match "^\s+$([regex]::Escape($pkg))\s" } | Select-Object -First 1
-        Write-Host "OK: $pkg installed ($($versionLine.Trim()))"
-    } else {
-        Write-Host "FAIL: $pkg not found in environment '$Name' after creation"
-        $FailCount++
+if ($installed) {
+    foreach ($pkg in $verifyPackages) {
+        if ($installed -match "^\s+$([regex]::Escape($pkg))\s") {
+            $versionLine = $installed | Where-Object { $_ -match "^\s+$([regex]::Escape($pkg))\s" } | Select-Object -First 1
+            Write-Host "OK: $pkg installed ($($versionLine.Trim()))"
+        } else {
+            Write-Host "FAIL: $pkg not found in environment '$Name' after creation"
+            $FailCount++
+        }
     }
 }
 

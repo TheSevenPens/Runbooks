@@ -29,7 +29,7 @@ $Apps = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "Visual Studio Code"; Verify = "code"; VerifyFlag = "--version" },
     @{ Id = "Google.Chrome.EXE";          Name = "Google Chrome";     Verify = $null },
     @{ Id = "Microsoft.WindowsTerminal";  Name = "Windows Terminal";  Verify = $null },
-    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version"; VerifyPath = "$env:ProgramFiles\PowerShell\7\pwsh.exe" }
+    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version"; VerifyPaths = @("$env:ProgramFiles\PowerShell\7\pwsh.exe", "${env:ProgramFiles(x86)}\PowerShell\7\pwsh.exe") }
 )
 
 # --- Helpers ---
@@ -55,8 +55,10 @@ foreach ($app in $Apps) {
     # CLI-verifiable apps: check command first (faster than winget list)
     if ($app.Verify) {
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
-        if (-not $exe -and $app.VerifyPath -and (Test-Path $app.VerifyPath)) {
-            $exe = Get-Command $app.VerifyPath -ErrorAction SilentlyContinue
+        if (-not $exe -and $app.VerifyPaths) {
+            foreach ($vp in $app.VerifyPaths) {
+                if (Test-Path $vp) { $exe = Get-Command $vp -ErrorAction SilentlyContinue; break }
+            }
         }
         if ($exe) {
             $verifyCmd = $exe.Source
@@ -64,7 +66,9 @@ foreach ($app in $Apps) {
             try {
                 $output = & $verifyCmd $app.VerifyFlag 2>&1 | Select-Object -First 1
                 $version = "$output".Trim()
-            } catch {}
+            } catch {
+                $version = "(version check failed: $_)"
+            }
             Write-Host "SKIP: $name already installed - $version"
             $alreadyInstalled = $true
         }
@@ -100,8 +104,10 @@ foreach ($app in $Apps) {
         $env:Path    = "$machinePath;$userPath"
 
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
-        if (-not $exe -and $app.VerifyPath -and (Test-Path $app.VerifyPath)) {
-            $exe = Get-Command $app.VerifyPath -ErrorAction SilentlyContinue
+        if (-not $exe -and $app.VerifyPaths) {
+            foreach ($vp in $app.VerifyPaths) {
+                if (Test-Path $vp) { $exe = Get-Command $vp -ErrorAction SilentlyContinue; break }
+            }
         }
         if ($exe) {
             $verifyCmd = $exe.Source
@@ -109,7 +115,9 @@ foreach ($app in $Apps) {
             try {
                 $output = & $verifyCmd $app.VerifyFlag 2>&1 | Select-Object -First 1
                 $version = "$output".Trim()
-            } catch {}
+            } catch {
+                $version = "(version check failed: $_)"
+            }
             Write-Host "OK: $name verified - $version"
         } else {
             Write-Host "WARN: $name installed but '$($app.Verify)' not found on PATH - reopen terminal to pick it up"

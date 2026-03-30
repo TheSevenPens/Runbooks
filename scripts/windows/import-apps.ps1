@@ -61,8 +61,11 @@ Write-Host "--- Checking installed packages ---"
 $toInstall = @()
 foreach ($pkg in $packages) {
     $id = $pkg.PackageIdentifier
+    # winget list can return exit code 0 even when the package isn't found on some
+    # Windows versions. Check both exit code AND that the package ID appears in output.
     $result = winget list --id $id --exact --accept-source-agreements 2>$null
-    if ($LASTEXITCODE -eq 0 -and $result -match $id) {
+    $resultStr = ($result | Out-String)
+    if ($LASTEXITCODE -eq 0 -and $resultStr -match [regex]::Escape($id)) {
         Write-Host "SKIP: $id already installed"
     } else {
         Write-Host "INFO: $id needs install"
@@ -83,7 +86,25 @@ Write-Host "--- Installing $($toInstall.Count) package(s) ---"
 
 # Use winget import for bulk install
 $output = winget import -i $InFile --accept-package-agreements --accept-source-agreements --ignore-unavailable 2>&1
-Write-Host "INFO: winget import completed"
+$importExitCode = $LASTEXITCODE
+
+# Report what happened during import
+$outputStr = ($output | Out-String)
+$successLines = @($output | Where-Object { $_ -match 'Successfully installed' })
+$failLines = @($output | Where-Object { $_ -match 'failed|error' -and $_ -notmatch 'ignore' })
+
+if ($successLines.Count -gt 0) {
+    Write-Host "INFO: winget import installed $($successLines.Count) package(s)"
+}
+if ($failLines.Count -gt 0) {
+    Write-Host "WARN: winget import reported $($failLines.Count) failure(s):"
+    foreach ($line in $failLines) { Write-Host "  $line" }
+}
+if ($importExitCode -ne 0) {
+    Write-Host "WARN: winget import exited with code $importExitCode"
+} else {
+    Write-Host "INFO: winget import completed"
+}
 
 # --- Verify all packages ---
 
@@ -98,7 +119,8 @@ $env:Path    = "$machinePath;$userPath"
 foreach ($pkg in $packages) {
     $id = $pkg.PackageIdentifier
     $result = winget list --id $id --exact --accept-source-agreements 2>$null
-    if ($LASTEXITCODE -eq 0 -and $result -match $id) {
+    $resultStr = ($result | Out-String)
+    if ($LASTEXITCODE -eq 0 -and $resultStr -match [regex]::Escape($id)) {
         Write-Host "OK: $id installed"
     } else {
         Write-Host "FAIL: $id not found after import"

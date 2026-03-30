@@ -331,6 +331,9 @@ Present results to the user in this format:
 | CMD AutoRun conflict when both conda and micromamba are installed | Both `conda_hook.bat` and `mamba_hook.bat` use `IF DEFINED CONDA_SHLVL GOTO :EOF` — whichever runs second silently exits. This is why the runbook removes conda first (Section 0) |
 | Removing conda deletes micromamba binary | If `micromamba.exe` lives inside `miniconda3\Scripts\` (not the canonical `AppData\Local\micromamba\`), uninstalling conda removes it. `remove-conda.ps1` now detects this and reinstalls to the canonical location first. If manual, reinstall micromamba before removing conda. |
 | PS7 profile has stale MAMBA_EXE after shell init | `micromamba shell init -s powershell` only writes the PS 5.1 profile. `micromamba-shell-init.ps1` now always syncs the PS7 profile block (replacing, not just checking for presence) and validates the MAMBA_EXE path matches the actual binary. |
+| `micromamba-shell-init.ps1` fails to parse under PS5.1 | Em-dash characters in UTF-8 without BOM cause PS5.1 parse errors. Fixed: em-dashes replaced with ASCII, file saved with UTF-8 BOM. |
+| `create-env.ps1` skips creation for ghost environments | When `micromamba env list` shows an environment but the directory doesn't exist, the script treated it as existing. Fixed: now verifies the prefix directory exists on disk before reporting the env as present. |
+| `create-env.ps1` reports false WARNs for packages in existing envs | `micromamba list -n` failure was silently treated as empty output. Fixed: exit codes checked before parsing. |
 
 ### macOS
 

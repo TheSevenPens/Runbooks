@@ -143,7 +143,7 @@ if ($staleRefs.Count -gt 0) {
     if (Test-Path $batWrapper) {
         $batContent = Get-Content $batWrapper -Raw
         foreach ($ref in $staleRefs) {
-            $batContent = $batContent -replace [regex]::Escape($ref), $canonicalPath
+            $batContent = $batContent.Replace($ref, $canonicalPath)
         }
         Set-Content -Path $batWrapper -Value $batContent -NoNewline
         Write-Host "OK: Updated .bat wrapper MAMBA_EXE"
@@ -155,13 +155,13 @@ if ($staleRefs.Count -gt 0) {
             $c = Get-Content $p -Raw
             $changed = $false
             foreach ($ref in $staleRefs) {
-                if ($c -match [regex]::Escape($ref)) {
-                    $c = $c -replace [regex]::Escape($ref), $canonicalPath
+                if ($c.Contains($ref)) {
+                    $c = $c.Replace($ref, $canonicalPath)
                     $changed = $true
                 }
             }
             if ($changed) {
-                Set-Content -Path $p -Value $c -NoNewline
+                Set-Content -Path $p -Value $c -NoNewline -Encoding UTF8
                 Write-Host "OK: Updated MAMBA_EXE in $p"
             }
         }
@@ -171,18 +171,20 @@ if ($staleRefs.Count -gt 0) {
     if (Test-Path $bashProfile) {
         $c = Get-Content $bashProfile -Raw
         $changed = $false
+        # Convert canonical Windows path to bash-style: C:\Users\... -> /c/Users/...
+        $bashCanonical = $canonicalPath -replace '\\', '/'
+        if ($bashCanonical -match '^([A-Za-z]):') {
+            $bashCanonical = '/' + $Matches[1].ToLower() + $bashCanonical.Substring(2)
+        }
         foreach ($ref in $staleRefs) {
-            # Handle both Windows and bash-style paths
-            $bashCanonical = $canonicalPath -replace '\\', '/' -replace '^([A-Za-z]):', '/`$1'
-            # Actually use the lowercase drive letter format: /c/Users/...
-            $bashCanonical = ($canonicalPath -replace '\\', '/') -replace '^([A-Za-z]):', { '/' + $_.Groups[1].Value.ToLower() }
-            if ($c -match [regex]::Escape($ref)) {
-                $c = $c -replace [regex]::Escape($ref), $bashCanonical
+            # Use literal string replacement to avoid regex special char issues
+            if ($c.Contains($ref)) {
+                $c = $c.Replace($ref, $bashCanonical)
                 $changed = $true
             }
         }
         if ($changed) {
-            Set-Content -Path $bashProfile -Value $c -NoNewline
+            Set-Content -Path $bashProfile -Value $c -NoNewline -Encoding UTF8
             Write-Host "OK: Updated MAMBA_EXE in .bash_profile"
         }
     }
@@ -203,8 +205,9 @@ if (Test-Path $BackupDir) {
             Copy-Item -Recurse $envsDir $BackupDir -ErrorAction Stop
             Write-Host "OK: Backed up $envCount environment(s) to $BackupDir"
         } catch {
-            Write-Host "WARN: Backup failed - $($_.Exception.Message)"
-            Write-Host "  Environments are still in $envsDir"
+            Write-Host "FAIL: Backup failed - $($_.Exception.Message)"
+            Write-Host "  Aborting removal to avoid data loss. Fix the backup issue and re-run."
+            exit 1
         }
     } else {
         Write-Host "SKIP: No environments to back up"
@@ -233,13 +236,35 @@ if ($LASTEXITCODE -eq 0 -and $wingetCheck -match 'Miniconda') {
 
 Write-Host ""
 Write-Host "--- Step 3: Remove miniconda3 directory ---"
-if (Test-Path $MinicondaDir) {
-    try {
-        Remove-Item -Recurse -Force $MinicondaDir -ErrorAction Stop
-        Write-Host "OK: Removed $MinicondaDir"
-    } catch {
-        Write-Host "WARN: Could not fully remove $MinicondaDir - files may be locked"
-        Write-Host "  Close all terminals and retry, or delete manually"
+
+# Safety: validate that $MinicondaDir is the expected path before recursive deletion.
+# This guards against accidental deletion if the variable is empty or was reassigned.
+$expectedMinicondaDir = "$env:USERPROFILE\miniconda3"
+if ($MinicondaDir -ne $expectedMinicondaDir) {
+    Write-Host "FAIL: MinicondaDir ($MinicondaDir) does not match expected path ($expectedMinicondaDir)"
+    Write-Host "  Refusing to delete - this is a safety check against accidental deletion"
+    $FailCount++
+} elseif ([string]::IsNullOrWhiteSpace($MinicondaDir)) {
+    Write-Host "FAIL: MinicondaDir is empty - refusing to delete"
+    $FailCount++
+} elseif (Test-Path $MinicondaDir) {
+    # Verify it actually looks like a conda installation
+    $looksLikeConda = (Test-Path "$MinicondaDir\conda-meta") -or
+                      (Test-Path "$MinicondaDir\Scripts\conda.exe") -or
+                      (Test-Path "$MinicondaDir\pkgs")
+    if (-not $looksLikeConda) {
+        Write-Host "FAIL: $MinicondaDir exists but does not look like a conda installation"
+        Write-Host "  Expected to find conda-meta, Scripts\conda.exe, or pkgs directory"
+        Write-Host "  Refusing to delete - inspect the directory manually"
+        $FailCount++
+    } else {
+        try {
+            Remove-Item -Recurse -Force $MinicondaDir -ErrorAction Stop
+            Write-Host "OK: Removed $MinicondaDir"
+        } catch {
+            Write-Host "WARN: Could not fully remove $MinicondaDir - files may be locked"
+            Write-Host "  Close all terminals and retry, or delete manually"
+        }
     }
 } else {
     Write-Host "SKIP: $MinicondaDir already removed"
@@ -325,7 +350,7 @@ if (Test-Path $bashProfile) {
     $content = Get-Content $bashProfile -Raw
     if ($content -match '# >>> conda initialize >>>') {
         $cleaned = $content -replace '(?s)# >>> conda initialize >>>.*?# <<< conda initialize <<<\r?\n?', ''
-        Set-Content -Path $bashProfile -Value $cleaned -NoNewline
+        Set-Content -Path $bashProfile -Value $cleaned -NoNewline -Encoding UTF8
         Write-Host "OK: Removed conda init block from .bash_profile"
     } else {
         Write-Host "SKIP: .bash_profile has no conda init block"
@@ -353,7 +378,7 @@ foreach ($profilePath in $psProfiles) {
             $cleaned = $content -replace '(?s)#region conda initialize.*?#endregion\r?\n?', ''
             # Also remove any standalone conda hook lines
             $cleaned = $cleaned -replace '(?m)^.*conda[-_]hook.*$\r?\n?', ''
-            Set-Content -Path $profilePath -Value $cleaned -NoNewline
+            Set-Content -Path $profilePath -Value $cleaned -NoNewline -Encoding UTF8
             Write-Host "OK: Cleaned conda references from $profilePath"
         } else {
             Write-Host "SKIP: $profilePath has no conda references"
@@ -367,8 +392,8 @@ Write-Host ""
 Write-Host "--- Step 9: Clean stale conda entries from environments.txt ---"
 $envsTxt = "$env:USERPROFILE\.conda\environments.txt"
 if (Test-Path $envsTxt) {
-    $lines = Get-Content $envsTxt
-    $cleanLines = $lines | Where-Object { $_ -notmatch 'miniconda|anaconda' }
+    $lines = @(Get-Content $envsTxt)
+    $cleanLines = @($lines | Where-Object { $_ -notmatch 'miniconda|anaconda' })
     $removedCount = $lines.Count - $cleanLines.Count
     if ($removedCount -gt 0) {
         Set-Content -Path $envsTxt -Value $cleanLines

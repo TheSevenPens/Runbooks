@@ -131,6 +131,10 @@ if ($mambaExeRefs.Count -gt 0) {
         if ($p -match '^\\([a-zA-Z])\\') {
             $p = "$($Matches[1].ToUpper()):\$($p.Substring(3))"
         }
+        # Convert /mnt/c/Users/... (WSL style) to C:\Users\...
+        elseif ($p -match '^\\mnt\\([a-zA-Z])\\') {
+            $p = "$($Matches[1].ToUpper()):\$($p.Substring(6))"
+        }
         return $p
     }
 
@@ -145,7 +149,9 @@ if ($mambaExeRefs.Count -gt 0) {
 
     foreach ($entry in $normalizedRefs.GetEnumerator()) {
         if (-not (Test-Path $entry.Value)) {
-            Write-Host "FAIL: MAMBA_EXE in $($entry.Key) points to non-existent $($mambaExeRefs[$entry.Key])"
+            $origPath = $mambaExeRefs[$entry.Key]
+            $normNote = if ($origPath -ne $entry.Value) { " (normalized: $($entry.Value))" } else { "" }
+            Write-Host "FAIL: MAMBA_EXE in $($entry.Key) points to non-existent ${origPath}${normNote}"
             $FailCount++
             $allExist = $false
         }

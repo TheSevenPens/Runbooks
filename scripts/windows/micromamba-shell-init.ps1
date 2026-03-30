@@ -1,4 +1,4 @@
-# micromamba-shell-init.ps1 - Run micromamba shell init for all Windows shells
+﻿# micromamba-shell-init.ps1 - Run micromamba shell init for all Windows shells
 #
 # Usage:
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File micromamba-shell-init.ps1
@@ -41,7 +41,7 @@ foreach ($path in $candidates) {
 if (-not $mmExe) {
     # Provide a clear message if only .bat was found
     if ($mmCmd -and $mmCmd.Source -match '\.bat$') {
-        Write-Host "FAIL: Only found .bat wrapper at $($mmCmd.Source) — the actual micromamba.exe is missing"
+        Write-Host "FAIL: Only found .bat wrapper at $($mmCmd.Source) -- the actual micromamba.exe is missing"
         Write-Host "  The .bat wrapper delegates to MAMBA_EXE which may be stale."
         Write-Host "  Reinstall micromamba: Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -UseBasicParsing).Content)"
     } else {
@@ -179,15 +179,15 @@ if ($pwshExe) {
             if ($ps7Content -match '(?s)#region mamba initialize.*?#endregion') {
                 # Replace existing block
                 $ps7Content = $ps7Content -replace '(?s)#region mamba initialize.*?#endregion', $initBlock
-                Set-Content -Path $ps7Profile -Value $ps7Content -NoNewline
+                Set-Content -Path $ps7Profile -Value $ps7Content -NoNewline -Encoding UTF8
                 Write-Host "OK: Updated micromamba init block in $ps7Profile"
             } else {
-                # No existing block — append
-                Add-Content -Path $ps7Profile -Value "`n$initBlock`n"
+                # No existing block -- append
+                Add-Content -Path $ps7Profile -Value "`n$initBlock`n" -Encoding UTF8
                 Write-Host "OK: Added micromamba init block to $ps7Profile"
             }
         } else {
-            Set-Content -Path $ps7Profile -Value "$initBlock`n"
+            Set-Content -Path $ps7Profile -Value "$initBlock`n" -Encoding UTF8
             Write-Host "OK: Created $ps7Profile with micromamba init block"
         }
     } else {
@@ -198,7 +198,7 @@ if ($pwshExe) {
 }
 
 # --- Verify MAMBA_EXE in all profiles ---
-# Don't just check for presence — validate that MAMBA_EXE points to the binary we used.
+# Don't just check for presence -- validate that MAMBA_EXE points to the binary we used.
 
 Write-Host ""
 Write-Host "--- Verifying MAMBA_EXE paths in profiles ---"
@@ -218,9 +218,11 @@ foreach ($profilePath in $psProfiles) {
                 Write-Host "WARN: $profilePath MAMBA_EXE is $profileMambaExe (differs from $mmExe but exists)"
             } else {
                 Write-Host "FAIL: $profilePath MAMBA_EXE points to non-existent $profileMambaExe"
-                # Auto-fix: replace with the known-good path
-                $content = $content -replace [regex]::Escape($profileMambaExe), $mmExe
-                Set-Content -Path $profilePath -Value $content -NoNewline
+                # Auto-fix: replace with the known-good path.
+                # Use .Replace() instead of -replace to avoid regex special chars in both
+                # the old path (backslashes) and new path (potential $ in usernames).
+                $content = $content.Replace($profileMambaExe, $mmExe)
+                Set-Content -Path $profilePath -Value $content -NoNewline -Encoding UTF8
                 Write-Host "  FIXED: Updated to $mmExe"
                 $FailCount++
             }

@@ -95,12 +95,15 @@ Every install, registry write, or file modification is followed by a verificatio
 
 ### 5. Canonical path fallbacks
 
-`Get-Command` fails when a tool is installed but PATH hasn't refreshed in the current session. Scripts define canonical install locations as fallbacks:
+`Get-Command` fails when a tool is installed but PATH hasn't refreshed in the current session. Scripts define canonical install locations as fallbacks. Search multiple candidates to handle different install paths (e.g., `Program Files` vs `Program Files (x86)`, localized Windows installs):
 
 ```powershell
 $exe = Get-Command pwsh -ErrorAction SilentlyContinue
-if (-not $exe -and (Test-Path "$env:ProgramFiles\PowerShell\7\pwsh.exe")) {
-    $exe = Get-Command "$env:ProgramFiles\PowerShell\7\pwsh.exe"
+if (-not $exe) {
+    $candidates = @("$env:ProgramFiles\PowerShell\7\pwsh.exe", "${env:ProgramFiles(x86)}\PowerShell\7\pwsh.exe")
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $exe = Get-Command $c -ErrorAction SilentlyContinue; break }
+    }
 }
 ```
 
@@ -161,6 +164,13 @@ Micromamba shell init writes hooks to the PowerShell 5.1 profile by default. If 
 - 5.1: `$USERPROFILE\Documents\WindowsPowerShell\profile.ps1`
 - 7: `$USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`
 
+### PowerShell 5.1 requires UTF-8 BOM for non-ASCII characters
+
+PS5.1 defaults to the system's ANSI codepage when reading scripts without a Byte Order Mark (BOM). If a script contains non-ASCII characters (em-dashes, curly quotes, etc.), PS5.1 will misparse them, causing syntax errors that don't appear under PS7. Two rules:
+
+1. **Avoid non-ASCII characters** in `.ps1` files (use `--` instead of `—`, ASCII quotes instead of curly quotes)
+2. **Save with UTF-8 BOM** if non-ASCII is unavoidable. Also add `-Encoding UTF8` to any `Set-Content` / `Add-Content` calls that write profile files
+
 ### Execution policy blocks scripts by default
 
 Windows ships with `Restricted` execution policy. `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` must be set before any `.ps1` script can run. `prepare-for-runbooks.ps1` handles this, but scripts invoked with `-ExecutionPolicy Bypass` sidestep it for themselves — the policy setting is for downstream scripts.
@@ -213,16 +223,48 @@ $FailCount = 0
 
 ### Adding a new app to install-apps.ps1
 
-Add an entry to the `$Apps` array. For CLI tools, set `Verify` to the command name and `VerifyFlag` to the version flag. If the tool installs to a known location that may not be on PATH immediately, add `VerifyPath`:
+Add an entry to the `$Apps` array. For CLI tools, set `Verify` to the command name and `VerifyFlag` to the version flag. If the tool installs to a known location that may not be on PATH immediately, add `VerifyPaths` (an array of candidate locations to search):
 
 ```powershell
 @{ Id = "Some.WingetId"; Name = "Display Name"; Verify = "cmd"; VerifyFlag = "--version";
-   VerifyPath = "$env:ProgramFiles\SomeApp\cmd.exe" }
+   VerifyPaths = @("$env:ProgramFiles\SomeApp\cmd.exe", "${env:ProgramFiles(x86)}\SomeApp\cmd.exe") }
 ```
 
 ### Adding a new shell to verify-shell-integration.ps1
 
 Use the `Test-ShellActivate` helper for shells that can be tested via process spawn. For shells that need special pre-checks (like CMD's AutoRun registry), implement the test inline following the CMD pattern.
+
+### String replacement in paths
+
+Use `.Replace()` (literal string replacement) instead of `-replace` (regex) when substituting file paths in shell configs:
+
+```powershell
+# GOOD: literal replacement, no regex surprises
+$content = $content.Replace($oldPath, $newPath)
+
+# BAD: -replace treats $ as backreference, \ as escape
+$content = $content -replace [regex]::Escape($oldPath), $newPath
+```
+
+Even with `[regex]::Escape()` on the pattern, the replacement string is still interpreted for regex backreferences (`$1`, `$&`, etc.). Windows paths containing `$` (e.g., in usernames) will silently corrupt the replacement.
+
+### Exit code checking on external commands
+
+Always check `$LASTEXITCODE` after calling external tools before parsing their output. Empty output from a failed command can silently pass validation:
+
+```powershell
+# GOOD: check exit code before parsing
+$output = & $mmExe env list 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "FAIL: command failed (exit code $LASTEXITCODE)"
+} elseif ($output -match $pattern) {
+    # safe to use the output
+}
+
+# BAD: empty output from a failed command matches nothing, silently treated as "not found"
+$output = & $mmExe env list 2>$null
+if ($output -match $pattern) { ... }
+```
 
 ### Cross-platform runbook sections
 
