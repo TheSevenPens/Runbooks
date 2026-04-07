@@ -123,6 +123,24 @@ foreach ($app in $Apps) {
             Write-Host "WARN: $name installed but '$($app.Verify)' not found on PATH - reopen terminal to pick it up"
         }
     }
+
+    # Post-install hook: if PowerShell 7 was just installed and micromamba is
+    # present, sync the PS7 profile so `micromamba activate` works in fresh
+    # pwsh windows. Without this, micromamba shell init only writes the PS5.1
+    # profile and PS7 sessions hit "Shell not initialized".
+    if ($id -eq "Microsoft.PowerShell") {
+        $mmExe = "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
+        if (Test-Path $mmExe) {
+            $initScript = Join-Path $PSScriptRoot "micromamba-shell-init.ps1"
+            if (Test-Path $initScript) {
+                Write-Host "INFO: Syncing micromamba PS7 profile (running micromamba-shell-init.ps1)..."
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $initScript
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "WARN: micromamba-shell-init.ps1 reported issues - run it manually"
+                }
+            }
+        }
+    }
 }
 
 # --- Summary ---

@@ -76,7 +76,7 @@ function Test-ShellActivate {
 
 # PowerShell 5.1 - must NOT use -NoProfile so hooks load
 Test-ShellActivate -ShellName "PowerShell 5.1" -Executable "powershell.exe" -Arguments @(
-    '-Command', '"micromamba activate base; if ($?) { Write-Output ACTIVATE_OK }"'
+    '-Command', '"micromamba activate base; if ($LASTEXITCODE -eq 0 -and $env:CONDA_PREFIX) { Write-Output ACTIVATE_OK }"'
 )
 
 # PowerShell 7 - optional, skip if not installed
@@ -97,7 +97,7 @@ if ($pwsh7Cmd) {
 }
 if ($pwsh7Path) {
     Test-ShellActivate -ShellName "PowerShell 7" -Executable $pwsh7Path -Arguments @(
-        '-Command', '"micromamba activate base; if ($?) { Write-Output ACTIVATE_OK }"'
+        '-Command', '"micromamba activate base; if ($LASTEXITCODE -eq 0 -and $env:CONDA_PREFIX) { Write-Output ACTIVATE_OK }"'
     )
 } else {
     Write-Host "SKIP: PowerShell 7 - pwsh.exe not found"

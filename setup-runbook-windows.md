@@ -86,7 +86,8 @@ oh-my-posh font install JetBrainsMono
 | Issue | Fix |
 |---|---|
 | Execution policy blocks scripts | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
-| `gh` auth needed after install | Run `gh auth login` manually |
+| `gh` auth needed after install | `gh` is installed inside the `node1` micromamba env (not system-wide). Activate first: `micromamba activate node1 && gh auth login` |
+| Fresh PS7 install left PS7 profile missing micromamba hook | Fixed: `install-apps.ps1` now auto-runs `micromamba-shell-init.ps1` after installing PS7 (if micromamba is present), and `verify-shell-integration.ps1` now checks `$LASTEXITCODE` + `$env:CONDA_PREFIX` so a missing hook can no longer pass silently. |
 | Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
 
 ---
