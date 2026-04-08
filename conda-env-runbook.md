@@ -319,6 +319,83 @@ Present results to the user in this format:
 
 ---
 
+## Section 5 — Exception: macOS libmamba fallback (conda)
+
+> ⚠️ **This section is an EXCEPTION, not the standard path.**
+>
+> The standard setup on both Windows and macOS is **micromamba only** — conda is intentionally removed (see Section 0). Use this fallback **only** if `micromamba create` fails with the libmamba `Could not codesign executable: Invalid argument` bug on macOS 26.x (see Notes & Known Issues → macOS). Do not use this section on Windows, and do not use it on macOS unless the micromamba path has been verified broken on the specific machine.
+>
+> If you use this fallback, **document it as machine-specific in your Status Tracker**. Retry micromamba after each libmamba/macOS update — the goal is to return to the standard path when the upstream bug is fixed.
+
+### 5a. Install Miniconda via Homebrew
+
+```zsh
+brew install --cask miniconda
+```
+
+### 5b. Remove conflicting micromamba shell init
+
+Remove the `# >>> mamba initialize >>>` block from `~/.zshrc` and `~/.bash_profile`. Conda and micromamba hooks can coexist in principle, but since the micromamba path is known broken on this machine, keeping its hooks only causes confusion.
+
+### 5c. Initialize conda shell hooks
+
+```zsh
+/opt/homebrew/Caskroom/miniconda/base/bin/conda init zsh bash
+```
+
+This adds a `# >>> conda initialize >>>` block to `~/.zshrc` and `~/.bash_profile`.
+
+> ⚠️ **Manual step:** Close and reopen your terminal after running init.
+
+### 5d. Configure conda-forge only (avoid Anaconda ToS prompt)
+
+Modern conda requires accepting Anaconda's Terms of Service for the default channels (`repo.anaconda.com/pkgs/main`, `pkgs/r`). We only want conda-forge, so remove defaults entirely and set strict channel priority:
+
+```zsh
+conda config --remove-key channels 2>/dev/null; \
+conda config --add channels conda-forge && \
+conda config --set channel_priority strict
+```
+
+### 5e. Create the `node1` environment
+
+Use `--override-channels` to force conda to ignore any stray defaults reference:
+
+```zsh
+conda create -n node1 --override-channels -c conda-forge nodejs python gh -y
+```
+
+### 5f. Verify
+
+```zsh
+conda activate node1
+node --version
+python --version
+gh --version
+```
+
+### 5g. Shell integration check
+
+| Shell | Test command | What to check |
+|---|---|---|
+| zsh  | `zsh -i -c "conda activate node1 && which node"`         | Prints a path under `/opt/homebrew/Caskroom/miniconda/base/envs/node1/bin` |
+| bash | `bash -l -i -c "conda activate node1 && which node"`     | Same |
+
+### 5h. Revisit micromamba periodically
+
+After future libmamba releases (`brew upgrade micromamba`) or macOS updates, retry the standard path:
+
+```zsh
+brew install micromamba
+micromamba shell init -s zsh -r ~/micromamba
+# Reopen terminal
+micromamba create -n node1-test -c conda-forge nodejs python gh -y
+```
+
+If it succeeds, you can migrate back to the standard path — uninstall miniconda, remove its shell init blocks, and update your Status Tracker to remove the exception flag.
+
+---
+
 ## Notes & Known Issues
 
 ### Windows
@@ -342,6 +419,7 @@ Present results to the user in this format:
 | `micromamba` not found after brew install | Run `micromamba shell init -s zsh -r ~/micromamba`, then open a new terminal |
 | Shell init modifies wrong file | Ensure you're running init for the correct shell (`zsh` for macOS default, not `bash`) |
 | Migrating from standalone micromamba to brew | Install via brew, re-run `micromamba shell init` to update `MAMBA_EXE` path in `.zshrc`/`.bash_profile`, then remove the old binary (e.g., `~/.local/bin/micromamba`). The `~/micromamba` root prefix and existing environments are preserved. |
+| `critical libmamba Could not codesign executable: Invalid argument` during `micromamba create` (macOS 26.x / Tahoe) | **Machine-specific libmamba bug.** Reproduced on a clean macOS 26.4 install with CLT 26.4.0, micromamba 2.5.0 from brew and standalone 1.5.10. Fails on the first Mach-O binary during the linking phase; `codesign -s - --force` on the same file from the shell succeeds, so it is not the OS `codesign` tool. libmamba uses Security.framework's `com.apple.CodeSigningHelper.xpc` directly (not fork/exec of `codesign`), and that code path returns EINVAL. **Not fixed by:** updating macOS, updating CLT, `CONDA_OVERRIDE_OSX`, `CONDA_SOLVER=classic`, switching micromamba versions. Verified working on another Tahoe Mac — machine-specific, not OS-wide. **Workaround:** use the macOS conda fallback path (see Section 5 — Exception: macOS libmamba fallback). Pixi (`brew install pixi`) also works but is not currently part of the runbook. |
 
 ### Cross-platform
 
@@ -400,6 +478,15 @@ Present results to the user in this format:
 - [ ] node verified in node1
 - [ ] python verified in node1
 - [ ] gh verified in node1
+
+## If Section 5 exception path was used (libmamba codesign bug):
+- [ ] EXCEPTION FLAG: this machine is on the conda fallback, not standard micromamba
+- [ ] Miniconda installed via brew cask
+- [ ] Micromamba shell init blocks removed from .zshrc and .bash_profile
+- [ ] conda init zsh bash completed
+- [ ] conda-forge set as only channel with strict priority
+- [ ] `node1` created with `--override-channels -c conda-forge`
+- [ ] Reminder: retry standard micromamba path after next `brew upgrade micromamba` or macOS update
 ```
 
 </details>

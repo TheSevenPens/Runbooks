@@ -43,21 +43,29 @@ brew --version
 
 ## Sections 2–5 — Install Dev Tools
 
-Installs Git, GitHub Desktop, VS Code, Chrome, and GitHub CLI via a single idempotent script. Already-installed apps are skipped.
+Installs Git, GitHub Desktop, VS Code, Chrome, and GitHub CLI declaratively from `apps/Brewfile`.
 
-### Run the install script
+### Run the Brewfile bundle (standard path)
 
 ```bash
-bash scripts/mac/install-apps.sh
+bash scripts/mac/bundle-install.sh
 ```
 
-> 📝 **Alternative: Homebrew Bundle.** For a one-shot declarative install, use the Brewfile instead:
-> ```bash
-> bash scripts/mac/bundle-install.sh
-> ```
-> This reads `apps/Brewfile` and installs all packages via `brew bundle`. Both approaches install the same apps — `install-apps.sh` gives per-app structured output while `bundle-install.sh` is faster for fresh machines.
+This reads `apps/Brewfile` and installs all packages via `brew bundle`. The Brewfile is the canonical source of truth for what gets installed on a machine — prefer this over the per-app script.
+
+> 📝 **Alternative: per-app script.** `scripts/mac/install-apps.sh` loops app-by-app with structured per-app status output. Useful for debugging or when you want to know exactly which app failed. Otherwise use the bundle.
 
 > ⚠️ **Manual step:** After the script completes, open a new terminal so PATH changes take effect.
+
+> ⚠️ **Known pitfall: brew cask adoption of pre-existing GUI apps.** If Chrome, VS Code, or GitHub Desktop are already installed on the machine by a different method (direct download, manual install, pre-existing user data), `brew bundle` will try to "adopt" the existing app bundle and fail:
+> - **Chrome / VS Code** — brew's adoption runs `sudo chmod -R a+rX` on the app, which cannot prompt for a password in a non-TTY context and fails with `sudo: a terminal is required to read the password`.
+> - **GitHub Desktop** — brew tries to write the `com.apple.metadata:kMDItemAlternateNames` xattr on a file inside the bundle, which hits SIP / entitlement protection and fails with `xattr: Operation not permitted`.
+>
+> If this happens, the fix is to **delete the pre-existing app bundle** and re-run the bundle install. Deleting requires sudo when the app is owned by root:
+> ```zsh
+> sudo rm -rf "/Applications/Visual Studio Code.app" "/Applications/Google Chrome.app"
+> ```
+> GitHub Desktop is often already gone by the time the error surfaces (brew's failed adoption purges its own attempted install). After deletion, re-run `bundle-install.sh` and the apps will install cleanly as fresh brew-managed casks.
 
 > 📝 **What the script installs:**
 >
@@ -165,7 +173,9 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 | `brew` not found after install (Apple Silicon) | Add `eval "$(/opt/homebrew/bin/brew shellenv)"` to `~/.zprofile` and open a new terminal |
 | `git --version` shows Apple Git after brew install | Open a new terminal — Homebrew's `/opt/homebrew/bin` should take PATH precedence over `/usr/bin` |
 | `code` command not found after VS Code install | Open VS Code → `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH" |
+| `brew bundle` fails adopting an already-installed cask (Chrome/VS Code/GitHub Desktop) | Pre-existing app bundles cannot be adopted: Chrome/VS Code fail on `sudo chmod` (no TTY for password), GitHub Desktop fails on an xattr write (SIP). Delete the pre-existing app with `sudo rm -rf /Applications/<App>.app` and re-run `bundle-install.sh`. |
 | Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| `micromamba create` fails with `Could not codesign executable: Invalid argument` on macOS 26.x | Machine-specific libmamba bug. See [conda-env-runbook.md](conda-env-runbook.md) — macOS Known Issues and Section 5 (conda fallback exception path). |
 
 ---
 
