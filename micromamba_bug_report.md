@@ -1,255 +1,135 @@
-# Bug report draft: reproc refuses to spawn on macOS 26 because default unlimited `RLIMIT_NOFILE` trips `get_max_fd()` → `MAX_FD_LIMIT` guard
+# Draft comment for mamba #1758
 
-> **Status:** Draft. File against `DaanDeMeyer/reproc`.
+> **Status:** Draft. Not a new issue. Intended as a comment to add to [`mamba-org/mamba#1758` — "could not find macOS version by calling sw_vers"](https://github.com/mamba-org/mamba/issues/1758), which is the already-existing (since 2022) OPEN issue tracking the user-visible mamba/micromamba symptom of the reproc `ulimit -n` bug.
 >
-> **Target repo:** https://github.com/DaanDeMeyer/reproc/issues
+> **Context for us:** reading #1758 carefully, the thread already has the root cause (`ulimit -n unlimited` → reproc can't spawn), the workaround (`ulimit -n` to a finite value), cross-references to [reproc#82](https://github.com/DaanDeMeyer/reproc/issues/82), and at least one report from 2024 saying the workaround "doesn't always work on M2 Macs." The thread doesn't appear to have (a) a fresh macOS 26 data point, (b) a specific recommended ulimit value with a principled basis, or (c) a discussion of defense-in-depth changes libmamba could make on its own side even before reproc is fixed. Those three things are what this comment adds.
 >
-> **Suggested title:** `macOS 26 default ulimit breaks reproc: get_max_fd() returns INT_MAX for RLIM_INFINITY, process_fork() rejects via MAX_FD_LIMIT with -EMFILE, child reports stale EINVAL to parent`
->
-> **Follow-up repo (after reproc):** I should probably also post a short note on [`conda-forge/miniforge#324`](https://github.com/conda-forge/miniforge/issues/324), because that 2+ year old thread has the same symptom and one of the commenters found the `ulimit -n` workaround by accident — now we'd know why it worked.
+> This file holds the draft comment text. Polish and post when ready.
 
 ---
 
-## Context
+## Draft comment for mamba#1758
 
-I'm a long-time Miniconda user on Windows and was experimenting with micromamba as a lighter drop-in alternative. I'm now starting to use macOS and hit a persistent failure on `micromamba create` with an error about being unable to codesign an executable. After some debugging the codesign framing turned out to be a red herring — the real issue is in reproc. I'm not a reproc contributor and this is the first time I've read the reproc source, so I may be off on some details, but I've narrowed the behavior down pretty concretely and have a clean reproducer.
+Hi — adding a fresh data point and a couple of small suggestions. I went through this exact debugging rabbit hole earlier today (as a first-time macOS user on 26 coming from Miniconda on Windows) and found this thread only after I'd convinced myself the problem was in `codesign()`, then in `env::empty`, then in `posix_spawn`, then finally in `get_max_fd()` — at which point I discovered #1758 and [reproc#82](https://github.com/DaanDeMeyer/reproc/issues/82) already had the answer. A few things I can contribute:
 
-## One-paragraph summary
+### Still broken on macOS 26 (Tahoe)
 
-On macOS 26 (Tahoe), the default shell has `ulimit -n` set to **unlimited** (`RLIM_INFINITY`). When reproc's `get_max_fd()` sees that, it returns `INT_MAX`. The next check in `process_fork()` then rejects anything above `MAX_FD_LIMIT = 1024 * 1024` and sets `r = -EMFILE`, so reproc refuses to spawn any process at all. As a secondary issue, the error that ends up in the parent's error pipe isn't `EMFILE` — it's `EINVAL`, because the child writes stale `errno` (left set to `EINVAL` by an intentionally-ignored `sigaction(signal=0)` call earlier in the same function) rather than `-r`. The visible result is that every `reproc::run` / `reproc::process::start` call on a fresh macOS 26 user account returns `ec = 22 (Invalid argument)`, and downstream consumers of reproc like micromamba break in confusing ways. Lowering `ulimit -n` to 1024 (or any value ≤ 1,048,576) before running the affected program is a complete workaround.
+In case it's useful for confirming the scope of the bug across recent macOS versions:
 
-## Downstream impact
+- Reproduced on macOS 26.3.1 (25D2128) and 26.4 (25E246).
+- Apple M4 Pro, two independent machines.
+- Fresh zsh with Oh My Zsh. `ulimit -n` is **unlimited** by default on macOS 26 — this seems to be a new default, and is probably why the symptom has become much more visible recently.
+- `brew install micromamba` → 2.5.0.
+- `micromamba create -n foo -c conda-forge libffi -y` fails every time with `critical libmamba Could not codesign executable: Invalid argument`. (A single-package transaction with just `libffi` is enough — no need for a full `nodejs python gh` set.)
+- Not fixed by macOS point updates, Xcode CLT updates, `CONDA_OVERRIDE_OSX`, or `CONDA_SOLVER=classic`.
 
-I originally found this through `micromamba` (mamba-org's standalone package manager, which links reproc dynamically for its codesign step during package linking). On a fresh macOS 26 user account, `micromamba create -n foo -c conda-forge libffi -y` fails with:
+### The specific `ulimit -n` value that works
 
-```
-critical libmamba Could not codesign executable: Invalid argument
-```
+The thread mentions `ulimit -n 1000000` as a workaround. That number works, but I think it's worth noting where it comes from: reproc's `process.posix.c` has `MAX_FD_LIMIT = 1024 * 1024 = 1,048,576`, and the guard is `if (max_fd > MAX_FD_LIMIT) r = -EMFILE`. So any value **≤ 1,048,576** slips under the check. `1,000,000` works by coincidence — it's less than `1 << 20`. If someone in the future bumps the `MAX_FD_LIMIT` constant, the `1000000` workaround might silently stop being sufficient (well, it'd become stricter than needed, not looser, so it'd be fine — but it's worth knowing the actual boundary).
 
-…which is actually libmamba's `codesign()` function calling `reproc::run("/usr/bin/codesign", ...)`, reproc refusing to spawn, and libmamba surfacing the reproc-reported `EINVAL` message verbatim in the exception it throws. With `ulimit -n 1024` set in the shell, the same `micromamba create` command succeeds and produces a correctly signed output:
+**`ulimit -n 1024` is the most conservative workaround I'd recommend** for docs or for hardcoding into wrapper scripts. It's comfortably below the cap, it's a round number, and it's close to the historical macOS default. On my machine it makes `micromamba create -n foo -c conda-forge libffi -y` succeed end to end, producing a correctly signed `libffi.8.dylib`:
 
 ```
 CodeDirectory v=20400 size=1127 flags=0x2(adhoc) hashes=30+2 location=embedded
 Signature=adhoc
 ```
 
-So the ulimit workaround is also a complete workaround for the downstream symptom.
+### Note on `@mathbunnyru`'s "workaround doesn't always work on M2 Macs" report
 
-Several symptoms in [conda-forge/miniforge#324](https://github.com/conda-forge/miniforge/issues/324) (OPEN since June 2022, same exact error message) look like the same bug — including a comment from one user who reported that dropping `ulimit -n` from unlimited to 1,000,000 fixed the error for them. That user landed on the workaround by coincidence: 1,000,000 happens to be less than `MAX_FD_LIMIT = 1,048,576` and so slips under the check.
+I'm on M4 Pro, not M2, and the `ulimit -n 1024` workaround is 100% reliable for me on both of my machines. If anyone reading this is still hitting the failure after `ulimit -n 1024`, I'd be interested to know what the actual `ulimit -n` value reports *inside* the failing shell (some shell plugins or Oh My Zsh themes can reset it after `.zshrc` runs, and what you set in `.zshenv` or `.zprofile` isn't always what's active when the command runs).
 
-Once this is fixed in reproc, I'll ping that thread so the miniforge folks can close it.
+### One finding that doesn't seem to be in the existing threads
 
-## Environment
+The error message everyone sees is `"Invalid argument"` (EINVAL = 22). But the actual failure reproc hits is `-EMFILE` (24) — reproc refuses to spawn because `get_max_fd()` returns `INT_MAX` for `RLIM_INFINITY`, which exceeds the `MAX_FD_LIMIT = 1,048,576` guard. The reason the parent sees EINVAL instead of EMFILE is that reproc's child-side `finish:` handler writes `errno` (not `-r`) to the parent's error pipe, and `errno` at that point is stale from an intentionally-ignored `sigaction(signal=0)` call in the same function (which deliberately returns `EINVAL`). So the real error is `EMFILE`, but the value that reaches the parent is `EINVAL`. That's why this bug has been so frustrating to debug for so many people: the error message is pointing at the wrong thing.
 
-| | |
-|---|---|
-| OS | macOS 26.3.1 (build 25D2128) and 26.4 (build 25E246) — both reproduce |
-| Kernel | Darwin 25.3.0 (`xnu-12377.91.3`) |
-| Hardware | Apple M4 Pro (arm64), two machines tested |
-| Default shell | zsh with Oh My Zsh |
-| `ulimit -n` (soft) | `unlimited` |
-| `ulimit -n` (hard) | `unlimited` |
-| reproc from Homebrew | 14.2.5 formula, dylib soname 14.2.4 |
-| reproc built from `main` | `git describe --tags` → `v14.2.5` (same as the current release; HEAD == v14.2.5) — same failure |
+I've filed a separate note on reproc#82 about the stale-errno reporting (it's a distinct bug from the fd-limit one, but it's been masking it in every downstream report). If that cosmetic fix lands, future debugging sessions for reproc-on-macOS issues should be significantly shorter.
 
-## Minimal reproducer
+### A few defensive things libmamba could consider
 
-About 30 lines of C++ against reproc14. No libmamba, no conda, no codesign. Full source at the bottom of this report if useful.
+These are offered as questions, not as firm asks. The root cause is upstream in reproc and the real fix is [reproc PR #103](https://github.com/DaanDeMeyer/reproc/pull/103). But there are things libmamba could do on its own side that would insulate users from this class of reproc bug, even before (or regardless of) the upstream fix shipping. In rough priority order:
 
-```bash
-# Assuming reproc is installed via Homebrew (brew install reproc)
-clang++ -std=c++17 repro.cpp \
-  -I/opt/homebrew/include -L/opt/homebrew/lib \
-  -lreproc++ -lreproc -o repro
-./repro
-```
-
-All the program does is call `reproc::run({"/bin/echo", "hello"})` a few times with different `env::behavior` settings. On my machine it prints:
+**1. A more actionable error message.** Right now `codesign()` in `util_os.cpp` throws with the raw reproc `ec.message()`, which is the literal string `"Invalid argument"`. That tells a user nothing about what went wrong or how to fix it. Could libmamba's `codesign()` wrap the error with something like:
 
 ```
-[reproc::run]  echo / env::extend → status=-1, ec=22 (Invalid argument)
-[reproc::run]  echo / env::empty  → status=-1, ec=22 (Invalid argument)
-[reproc::run]  true / env::extend → status=-1, ec=22 (Invalid argument)
-[reproc::run]  true / env::empty  → status=-1, ec=22 (Invalid argument)
+Failed to codesign <path>: <reproc_message>.
+On macOS, this can happen when `ulimit -n` is unlimited.
+See https://github.com/DaanDeMeyer/reproc/issues/82 and try:
+    ulimit -n 1024
+before running this command.
 ```
 
-Eight variations in total (I also tested the lower-level `reproc::process::start()` API directly). **All eight fail the same way**, with `EINVAL`, regardless of command, envp behavior, or API level.
+The `ulimit` hint could be gated on `target_platform == osx-arm64 && getrlimit(RLIMIT_NOFILE).rlim_cur == RLIM_INFINITY`, so it only appears when it's actually relevant. Would a PR in this direction be welcome?
 
-But:
+**2. Temporarily lower `RLIMIT_NOFILE` around the reproc call.** Since libmamba knows it's about to call reproc, and reproc has this known interaction with unlimited `RLIMIT_NOFILE`, libmamba could temporarily cap the limit around the call:
 
-```bash
-ulimit -n 1024 && ./repro
-```
-
-…every call succeeds. `status=0, ec=0`. The shell-level `ulimit` setting completely determines whether reproc can spawn anything.
-
-## What I expected vs. what actually happens
-
-| Item | Expected | Actual |
-|---|---|---|
-| `reproc::run({"/bin/echo", "hello"})` | `status=0`, `ec=0`, `hello` printed on stdout | `status=-1`, `ec=22 ("Invalid argument")`, no output |
-| `/bin/echo` itself | Works | Works (direct `posix_spawn`-based C test works fine — see below) |
-| macOS `fork()` / `execvp()` | Works | Works (verified by writing a plain C program using fork+execvp that runs `/bin/echo` successfully) |
-| Changing `ulimit -n` from `unlimited` to `1024` | No effect on reproc's behavior | Every reproc call starts working |
-
-The third row is what narrowed it down for me — I first assumed reproc was just wrapping `posix_spawn`, and when I wrote a standalone C program using `posix_spawn` directly it worked perfectly on macOS 26 with every envp variant. That made me go look at what reproc actually does, which is `fork() + execvp()` + a child-side cleanup loop, not `posix_spawn`. That's where I found `get_max_fd()`.
-
-## What I think is happening
-
-Walking through `reproc/src/process.posix.c` on the `v14.2.5` tag:
-
-```c
-static const int MAX_FD_LIMIT = 1024 * 1024;
-
-static int get_max_fd(void)
+```cpp
+void codesign(const fs::u8path& path, bool verbose)
 {
-    struct rlimit limit = { 0 };
-    int r = getrlimit(RLIMIT_NOFILE, &limit);
-    if (r < 0) {
-        return -errno;
+    struct rlimit original;
+    getrlimit(RLIMIT_NOFILE, &original);
+    if (original.rlim_cur == RLIM_INFINITY || original.rlim_cur > 1024 * 1024) {
+        struct rlimit capped = original;
+        capped.rlim_cur = 1024;
+        setrlimit(RLIMIT_NOFILE, &capped);
     }
-    rlim_t soft = limit.rlim_cur;
-    if (soft == RLIM_INFINITY || soft > INT_MAX) {
-        return INT_MAX;
-    }
-    return (int) (soft - 1);
+
+    // ... existing reproc call ...
+
+    setrlimit(RLIMIT_NOFILE, &original);  // restore
 }
 ```
 
-And in `process_fork()` (child side, before `execvp`):
+This is a belt-and-suspenders fix that would route around the reproc bug entirely without depending on an upstream release. I'm not sure whether mutating `RLIMIT_NOFILE` inside a library call is considered polite in libmamba's style — there may be good reasons not to touch the process-wide limit. Thoughts?
 
-```c
-r = get_max_fd();
-if (r < 0) {
-    goto finish;
-}
-int max_fd = r;
-if (max_fd > MAX_FD_LIMIT) {
-    // Refuse to try to close too many file descriptors.
-    r = -EMFILE;
-    goto finish;
-}
-for (int i = 0; i < max_fd; i++) {
-    // close every fd that's not in the except list
-    ...
-}
-```
+**3. A known-issues entry in the docs.** Users on existing libmamba releases are going to keep hitting this for a while. A docs entry — even just a short "if you see `Could not codesign executable: Invalid argument` on macOS, run `ulimit -n 1024`" — would save people the same debugging session.
 
-On macOS 26, the shell starts with `ulimit -n` unlimited, so `getrlimit(RLIMIT_NOFILE)` returns `RLIM_INFINITY`, `get_max_fd()` returns `INT_MAX = 2,147,483,647`, that's much greater than `MAX_FD_LIMIT = 1,048,576`, and the child sets `r = -EMFILE` and jumps to `finish:`. Which is a reasonable safeguard against a 2-billion-iteration fd-close loop — I'm not complaining about the check existing. But it means reproc is completely unusable on macOS 26 out of the box, because the default user shell has that unlimited value.
+### In summary
 
-### The cosmetic second issue
+- Confirming this is still live on macOS 26.
+- `ulimit -n 1024` is a clean principled value for the workaround.
+- Flagging a separate stale-errno finding on reproc#82 that explains why the error message has been so misleading.
+- Asking whether any of the defense-in-depth suggestions above would be welcome PRs.
 
-At `finish:` the child writes its error back to the parent over the error pipe:
-
-```c
-finish:
-    if (r < 0) {
-        (void) !write(pipe.write, &errno, sizeof(errno));
-        _exit(EXIT_FAILURE);
-    }
-```
-
-Notice it's writing `errno`, not `-r` / `abs(r)`. If I'm reading it right, the value that ends up being read by the parent is whatever the most recently failing syscall left in `errno` — which might or might not be the thing that actually caused the child to jump to `finish`.
-
-In this specific code path, `errno` at the point of the `-EMFILE` set is stale from the signal-reset loop a few hundred lines up:
-
-```c
-for (int signal = 0; signal < 32; signal++) {
-    r = sigaction(signal, &action, NULL);
-    if (r < 0 && errno != EINVAL) {   // ← intentionally ignoring EINVAL
-        r = -errno;
-        goto finish;
-    }
-}
-```
-
-`sigaction(signal=0, ...)` deliberately returns `-1` with `errno = EINVAL` because signal 0 isn't valid, and that loop specifically ignores `EINVAL`. But it doesn't clear `errno`, so `errno` stays `EINVAL` through the rest of the function. When the EMFILE branch fires and the child writes `errno` to the pipe, what gets reported to the parent is `22 (EINVAL)` — *not* `24 (EMFILE)`.
-
-That's why every downstream reproc user on macOS 26 gets a mysterious "Invalid argument" error instead of a more-informative "Too many open files" / EMFILE. If this had been reported as EMFILE from the start, I suspect the connection to `ulimit -n` would have been obvious to one of the people in [miniforge#324](https://github.com/conda-forge/miniforge/issues/324) years ago.
-
-Caveat on this second piece: I haven't patched reproc locally to verify that changing the `finish:` write from `&errno` to something like `&(int){-r}` would produce the expected value at the parent side. So the stale-errno explanation is my reading of the code rather than a patched-build confirmation, and I'd appreciate a sanity check on that specific step.
-
-## What I tried on the way
-
-In case any of this is useful for ruling things out:
-
-- Updated macOS from 26.3.1 to 26.4 — no change.
-- Updated Xcode Command Line Tools from 26.3 to 26.4 — no change.
-- Tried reproc 14.2.5 from Homebrew, and also built reproc from source at the `main` branch (which is the same `v14.2.5` commit) — both fail identically.
-- Reproduced on two separate M4 Pro machines with fresh macOS 26 installs — same failure on both.
-- Wrote a plain C `posix_spawn`-based test program — works fine on macOS 26, so the underlying OS spawn syscalls are healthy.
-- Tested both `reproc::run()` (high-level) and `reproc::process::start()` (low-level) — both fail at the same point.
-- Tested with `env::extend` and `env::empty` — no difference.
-- Tested with `/bin/echo` and `/usr/bin/true` — no difference (so it's not specific to writing output and hitting a drain/read path).
-- Discovered that `ulimit -n 1024` before running the reproducer fixes every case.
-- Traced the mechanism in `process.posix.c` as described above.
-
-## Suggested fix directions
-
-I don't know the reproc codebase well enough to send a PR with confidence, but these are the directions that come to mind:
-
-**Primary fix — avoid iterating 2 billion fds.** Rather than trying to close every possible fd, there are a few OS-specific ways to enumerate only the fds that are actually open in the calling process:
-
-- Linux: iterate `/proc/self/fd/`
-- macOS/BSD: `proc_pidinfo(getpid(), PROC_PIDLISTFDS, ...)`
-- Or rely on `FD_CLOEXEC` being set on everything reproc creates and trust that (reproc already does some of this, I think)
-- Or use `closefrom()` (BSD) / `close_range()` (Linux 5.9+) where available
-
-If none of that is appealing, a simpler change is to **cap `get_max_fd()`'s return value at something like `min(soft, 16384)`** when `RLIM_INFINITY` is reported, rather than `INT_MAX`. The loop would then be bounded and reproc would not refuse the spawn. This is a small change but means reproc silently closes up to 16K fds even on machines where far fewer are actually open.
-
-A third option is to **raise `MAX_FD_LIMIT`** from 1 MiB to something bigger — but that just kicks the can down the road for any future macOS that bumps the default even higher, and doesn't address the "we're iterating a huge range for no reason" performance problem.
-
-**Secondary fix — report the right errno.** Whatever the primary fix ends up being, I think the `finish:` path should report something that reflects `-r` (the reason the child decided to give up) rather than the stale `errno` from the signal-reset loop. Even just a local variable like `int child_err = -r; write(pipe.write, &child_err, sizeof(child_err));` would have saved multiple people multiple debugging sessions. This is a small, low-risk change that's worth doing regardless of how the primary bug gets fixed.
-
-I'd be happy to test any of these directions on my machines if someone points me at a patch.
-
-## What I'm hoping for from this issue
-
-1. A sanity check on whether my reading of `process.posix.c` is right and whether the EINVAL-from-stale-errno story holds up.
-2. If so, a fix in reproc (even just raising or clamping `get_max_fd()`) so macOS 26 users can use reproc-dependent tools without the `ulimit -n` dance.
-3. Optionally, the cosmetic errno-reporting fix in the `finish:` path, because the misleading error message cost me a lot of time on the wrong hypothesis and I suspect it's cost others the same.
-
-Thanks for reproc — I know this is an unexpected angle of attack from a random user.
+Thanks for mamba — and apologies for landing on an old thread. Happy to test any patch against my reproducer setup.
 
 ---
 
-## Appendix: the full minimal reproducer
+## Context for us (not for posting)
 
-```cpp
-// repro.cpp
-// build: clang++ -std=c++17 repro.cpp \
-//          -I/opt/homebrew/include -L/opt/homebrew/lib \
-//          -lreproc++ -lreproc -o repro
+### Reproducer (micromamba level)
 
-#include <reproc++/run.hpp>
-#include <reproc++/reproc.hpp>
-#include <iostream>
-#include <vector>
-#include <string>
-
-static void try_run(const char *label, std::vector<std::string> cmd,
-                    reproc::env::type behavior)
-{
-    reproc::options options;
-    options.env.behavior = behavior;
-    auto [status, ec] = reproc::run(cmd, options);
-    std::cout << label
-              << " → status=" << status
-              << ", ec=" << ec.value()
-              << " (" << ec.message() << ")\n";
-}
-
-int main()
-{
-    std::vector<std::string> echo = {"/bin/echo", "hello"};
-    std::vector<std::string> t    = {"/usr/bin/true"};
-
-    try_run("echo / env::extend", echo, reproc::env::extend);
-    try_run("echo / env::empty ", echo, reproc::env::empty);
-    try_run("true / env::extend", t,    reproc::env::extend);
-    try_run("true / env::empty ", t,    reproc::env::empty);
-    return 0;
-}
+```bash
+brew install micromamba
+micromamba shell init -s zsh -r ~/micromamba
+# open a new terminal
+micromamba create -n repro -c conda-forge libffi -y
+# → fails: critical libmamba Could not codesign executable: Invalid argument
 ```
 
-Without `ulimit -n 1024`: every line prints `status=-1, ec=22 (Invalid argument)`. With `ulimit -n 1024`: every line prints `status=0, ec=0 (Success)`.
+Workaround:
+
+```bash
+ulimit -n 1024
+micromamba create -n repro2 -c conda-forge libffi -y
+# → Transaction finished
+```
+
+### Environment details
+
+| | |
+|---|---|
+| OS | macOS 26.3.1 (25D2128) and 26.4 (25E246) |
+| Hardware | Apple M4 Pro (arm64), two machines |
+| Default shell | zsh with Oh My Zsh |
+| `ulimit -n` (default on macOS 26) | `unlimited` |
+| micromamba | 2.5.0 from Homebrew, 1.5.10 standalone — both reproduce |
+| libmamba | tag `2.5.0` and current `main` |
+| reproc | dynamically linked from `/opt/homebrew/opt/reproc`, formula 14.2.5, dylib soname 14.2.4 |
+
+### Cross-references
+
+- Upstream root cause: [`DaanDeMeyer/reproc#82`](https://github.com/DaanDeMeyer/reproc/issues/82) (OPEN)
+- Upstream fix in progress: [`DaanDeMeyer/reproc#103` — "Only close open file descriptors"](https://github.com/DaanDeMeyer/reproc/pull/103) (OPEN, not merged)
+- Related long-running symptom thread: [`conda-forge/miniforge#324`](https://github.com/conda-forge/miniforge/issues/324) (OPEN since 2022)
+- Our draft for reproc#82: `reproc_bug_report.md` in this repo
+- Our full investigation: `macos_micromamba_debug_runbook.md` Section 15
