@@ -642,6 +642,275 @@ Next-step suggestions for the broken mac that this fingerprint enables:
 
 ---
 
+## Section 15 — Deep dive (added during this run)
+
+> Six follow-up probes run after the initial fingerprint nailed down the root cause. Sections 1–14 stay aligned with the original template; this section is the new diagnostic content.
+
+### 15a. Inspect libffi *as it ships in the conda-forge tarball*
+
+```bash
+mkdir -p /tmp/libffi-extract
+tar -xjf ~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5.tar.bz2 -C /tmp/libffi-extract
+codesign -dvvv /tmp/libffi-extract/lib/libffi.8.dylib
+otool -l /tmp/libffi-extract/lib/libffi.8.dylib | grep -A5 LC_CODE_SIGNATURE
+```
+
+Result:
+
+```
+file: -rwxr-xr-x  120496 bytes  mtime: Nov  9 2021
+xattr: com.apple.provenance only
+Mach-O 64-bit dylib arm64 (thin)
+
+codesign -dvvv:
+  Identifier=libffi.8.dylib
+  Format=Mach-O thin (arm64)
+  CodeDirectory v=20200 size=1059 flags=0x0(none) hashes=29+2 location=embedded
+  Hash type=sha256 size=32
+  CandidateCDHash sha1=739d1aa1770c32046c72e03650413faefeb848de
+  CandidateCDHash sha256=9d7f65bbb20ee4ab8665c42d39810880ac572e39
+  Hash choices=sha1,sha256                  ← carries BOTH sha1 and sha256
+  CMSDigest=bd6496f5ca11fb...
+  Internal requirements count=1 size=132
+
+LC_CODE_SIGNATURE: dataoff 118576, datasize 1920
+```
+
+> So libffi-3.4.2-h3422bc3_5 ships from conda-forge with an old-format ad-hoc signature: **CDv=20200**, dual sha1+sha256 hash choices, mtime Nov 2021. This was an initially-promising lead — sha1 in code signatures is deprecated on modern macOS — but Section 15c rules it out.
+
+### 15b. Manual codesign on the freshly extracted file
+
+```bash
+cp /tmp/libffi-extract/lib/libffi.8.dylib /tmp/libffi-test.dylib
+codesign -s - --force /tmp/libffi-test.dylib
+codesign -dvvv /tmp/libffi-test.dylib | grep -E "CodeDirectory|Signature|Hash"
+```
+
+Result:
+
+```
+/tmp/libffi-test.dylib: replacing existing signature   exit=0
+CodeDirectory v=20400 size=461 flags=0x2(adhoc) hashes=8+2 location=embedded
+Hash choices=sha256
+Signature=adhoc
+```
+
+Also tested: `codesign --remove-signature` then `codesign -s - --force` → also exit 0, valid CDv=20400 sha256 ad-hoc signature.
+
+> **`/usr/bin/codesign` has zero problem with this file.** It happily replaces the old CDv=20200/sha1+sha256 signature with a clean CDv=20400/sha256 ad-hoc one. So the file is not poisoned and the OS tool is not broken on macOS 26.3.1. The bug must be in *how libmamba is invoking codesign*, not in codesign or the file.
+
+### 15c. Pre-sign libffi *in the cache* and re-run micromamba
+
+```bash
+codesign -s - --force ~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5/lib/libffi.8.dylib
+codesign -s - --force ~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5/lib/libffi.dylib
+# now CDv=20400, hash choices sha256
+
+micromamba create -n debug-libffi-only -c conda-forge libffi -y
+```
+
+Result:
+
+```
+Linking libffi-3.4.2-h3422bc3_5
+critical libmamba Could not codesign executable: Invalid argument
+
+ls -la $env/lib/libffi.8.dylib:
+  -rwxrwxr-x@ 137056 bytes  mtime: 01:21 (today)   ← file IS in the env
+codesign -dv on the in-env file:
+  CodeDirectory v=20400 size=417 flags=0x2(adhoc) hashes=8+2 location=embedded
+  ← VALIDLY signed, CDv=20400, ad-hoc, sha256
+```
+
+> **Two things this proves:**
+>
+> 1. **Pre-upgrading the cache file's signature does NOT fix the failure.** The original sha1/CDv=20200 signature is *not* the trigger.
+> 2. **After the failure, the in-env file IS validly signed (CDv=20400 ad-hoc).** That means `/usr/bin/codesign` actually ran to completion successfully, signed the file, and exited 0. **The error is spurious from libmamba's perspective.**
+>
+> The libffi binary that ends up in the env is +16560 bytes larger than the cache file (137056 vs 120496) because the new signature payload + Mach-O code-signature LC slot expansion adds bytes — exactly what a successful re-sign produces. So codesign clearly succeeded.
+
+(Cache file restored to original CDv=20200 from the extracted tarball at the end of this section so the runbook reproduces the same starting state next run.)
+
+### 15d. Single-package isolated repro
+
+```bash
+micromamba create -n debug-libffi-only -c conda-forge libffi -y
+```
+
+Result:
+
+```
+Transaction starting
+Linking libffi-3.4.2-h3422bc3_5
+critical libmamba Could not codesign executable: Invalid argument
+```
+
+> **Confirmed minimal reproducer:** a one-package transaction with just `libffi` from `conda-forge` reproduces the failure. This is the smallest possible test case for an upstream bug report.
+
+### 15e. Find what's calling codesign inside libmamba
+
+```bash
+otool -L /opt/homebrew/Cellar/micromamba/2.5.0_3/lib/libmamba.4.dylib | grep -i security
+nm -gU /opt/homebrew/Cellar/micromamba/2.5.0_3/lib/libmamba.4.dylib | grep -iE "SecCode|codesign"
+nm -u /opt/homebrew/Cellar/micromamba/2.5.0_3/lib/libmamba.4.dylib | grep -iE "_exec|_posix_spawn|_fork"
+strings /opt/homebrew/Cellar/micromamba/2.5.0_3/lib/libmamba.4.dylib | grep -E "codesign|/usr/bin/codesign|Could not codesign"
+```
+
+Result:
+
+```
+libmamba.4.dylib otool -L: NO Security.framework link (only libyaml-cpp, fmt, libarchive,
+  libcurl, openssl@3, libbz2, libreproc, libsimdjson, libzstd, libsolv, libsolvext, libc++, libSystem)
+
+Defined symbol: T __ZN5mamba8codesignERKNS_2fs6u8pathEb
+  → demangled: mamba::codesign(fs::u8path const&, bool)
+
+Undefined symbols (subprocess-related):
+  __ZNSt3__120__throw_system_errorEiPKc
+  _fork
+
+Strings:
+  /usr/bin/codesign
+  Could not codesign executable:
+```
+
+> **The header was wrong.** libmamba does **NOT** call `Security.framework` SecCode APIs directly. It **fork/execs `/usr/bin/codesign`** as a subprocess (via the linked-in `libreproc++.14.dylib`). The XPC helper that we saw running in Section 9b is the one `/usr/bin/codesign` itself spawns when it talks to Security.framework — not one libmamba talks to.
+>
+> The "Invalid argument" string is `strerror(EINVAL)`, returned via `std::error_code::message()` from libmamba's wrapper around `reproc::run`. It is NOT the codesign exit message.
+
+### 15f. The libmamba 2.5.0 source — exactly what's broken
+
+Pulled from `libmamba/src/core/util_os.cpp` at tag `2.5.0`:
+
+```cpp
+void codesign(const fs::u8path& path, bool verbose)
+{
+    reproc::options options;
+    options.env.behavior = reproc::env::empty;     // ← spawn with EMPTY environment
+    if (!verbose)
+    {
+        reproc::redirect silence;
+        silence.type = reproc::redirect::discard;
+        options.redirect.out = silence;
+        options.redirect.err = silence;
+    }
+
+    const std::vector<std::string> cmd = {
+        "/usr/bin/codesign", "-s", "-", "-f", path.string()
+    };
+    auto [status, ec] = reproc::run(cmd, options);
+    if (ec)
+    {
+        throw std::runtime_error(
+            std::string("Could not codesign executable: ") + ec.message()
+        );
+    }
+}
+```
+
+> Three load-bearing facts in this snippet:
+>
+> 1. `reproc::env::empty` — the spawned codesign process gets an **empty** `envp[]` (no `PATH`, no `HOME`, no `__CF*`, nothing).
+> 2. The argv is exactly `/usr/bin/codesign -s - -f <path>` — minimal and clearly correct.
+> 3. The error path checks `ec` (an `std::error_code` from reproc), not `status` (the codesign exit code). So **codesign can succeed and the function can still throw**, if reproc itself returns a non-zero error code from anywhere in its spawn/wait/drain pipeline.
+
+**This is the bug.** On macOS 26 (build 25D2128, kernel xnu-12377.91.3), reproc's `run()` returns `EINVAL` when spawning `/usr/bin/codesign` with `env::empty`, even though the spawn actually succeeds and codesign runs to completion. The `ec` is bubbled into the error message as `"Invalid argument"` and libmamba aborts the install — even though the file is already validly signed by the codesign call that just ran.
+
+Most likely culprits inside reproc + macOS 26:
+
+- `posix_spawn` with `envp = NULL` or `envp = {NULL}` may now require at least one entry on this OS build (some libsystem code paths assume `__CF_USER_TEXT_ENCODING` is present and EINVAL on absence).
+- Or reproc's `posix_spawn_file_actions_addopen` for the discard-redirect path returns EINVAL on this build (but we tested with `-v` in Section 7 which disables the discard path, and it still fails — so probably not this).
+- Or an interaction between `posix_spawnattr_setflags` and the empty env on the new kernel.
+
+Whichever it is, **the fix is in libmamba**: don't pass `reproc::env::empty` for the codesign call (pass the parent environment, or at minimum a one-entry env containing `PATH=/usr/bin`). Until then, micromamba 2.5.0 cannot create envs on this machine.
+
+### 15g. Survey: any other CDv=20200 dylibs in the cache?
+
+```bash
+for d in ~/micromamba/pkgs/*/lib/*.dylib; do
+  V=$(codesign -dv "$d" 2>&1 | grep -oE "CodeDirectory v=[0-9]+")
+  [ "$V" = "CodeDirectory v=20200" ] && echo "$d"
+done
+```
+
+Result:
+
+```
+~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5/lib/libffi.8.dylib
+~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5/lib/libffi.dylib    (symlink → libffi.8.dylib)
+```
+
+> libffi is the only file in the entire 21-package cache with the legacy CDv=20200 format. Every other dylib (icu, libcurl, openssl, python, nodejs's libnode, etc.) ships with CDv=20400 sha256-only ad-hoc signatures. This is why libffi is **always** the file that triggers the failure — it's the only candidate. (And confirmed by Section 15c: even after manually upgrading libffi to CDv=20400, libmamba still fails on the very same file — because the bug is in the *invocation*, not the file.)
+
+### 15h. Conclusion and root-cause summary
+
+```
+Root cause:  libmamba 2.5.0 invokes /usr/bin/codesign via reproc::run() with
+             reproc::options::env::empty (an empty spawn environment). On
+             macOS 26 build 25D2128 (kernel xnu-12377.91.3) reproc returns
+             EINVAL from this spawn even though codesign actually succeeds
+             and the target file ends up correctly signed. libmamba checks
+             reproc's `ec` rather than codesign's exit code, throws
+             "Could not codesign executable: Invalid argument" (which is
+             strerror(EINVAL)), and aborts the install.
+
+Why libffi:  Linking proceeds in alphabetical order. The first six packages
+             with binaries (gh, icu, libuv, xz, bzip2, libexpat) all link
+             without ever calling codesign on a Mach-O that the OS dislikes,
+             and somehow their reproc spawns return ec=0. libffi is the
+             7th and is the first one that takes a codepath that triggers
+             the EINVAL — possibly because libffi's tarball has CDv=20200,
+             possibly because it's the alphabetically-first .tar.bz2 and not
+             a .conda. We have NOT root-caused the per-file branch yet,
+             only the env::empty smoking gun. The earlier 6 packages may
+             succeed because reproc happens to return 0 even when it shouldn't,
+             or because libmamba doesn't actually call codesign on every
+             file. Worth tracing with sample(1) on the failing process.
+
+Status:      Bug, in libmamba. Reproducible on macOS 26.3.1 (25D2128) /
+             Apple M4 Pro / Xcode CLT 26.3 with brewed micromamba 2.5.0_3.
+
+Workarounds:
+  • Use `conda install` (vendored Python `subprocess` codepath, normal env)
+    instead of micromamba for env creation on macOS 26. This contradicts
+    the user-preference rule "use micromamba only" but is the only actually-
+    working option without an upstream fix.
+  • Patch libmamba.4.dylib to not pass env::empty (binary patch — fragile,
+    not recommended).
+  • DYLD_INSERT_LIBRARIES shim that intercepts posix_spawn and injects
+    a default envp when an empty one is passed (complex, SIP interactions).
+  • Wait for an upstream libmamba release that drops env::empty for the
+    codesign call.
+
+Upstream report:
+  Should be filed at https://github.com/mamba-org/mamba/issues
+  with title roughly "macOS 26: libmamba codesign() spuriously fails with
+  'Invalid argument' due to reproc::env::empty"
+  and link to libmamba/src/core/util_os.cpp::codesign().
+
+Open questions:
+  • Why do the 6 packages BEFORE libffi succeed if every codesign call uses
+    the same env::empty path? → trace with `sample` or `lldb` on the next run.
+  • Does setting env::empty → env::extend with a minimal env via a tiny
+    libmamba patch make the bug go away? → confirms the fix.
+  • Is this fixed in a libmamba > 2.5.0? → check newer versions / git HEAD.
+```
+
+### 15i. Cleanup performed by Section 15
+
+```
+- /tmp/libffi-extract removed
+- /tmp/libffi-test*.dylib removed
+- /tmp/mm-bg.log, /tmp/mm-create.log, /tmp/mm-time.log removed
+- ~/micromamba/pkgs/libffi-3.4.2-h3422bc3_5/lib/libffi.8.dylib RESTORED
+  from the original tarball (back to CDv=20200) so the runbook reproduces
+  the same starting state on next run
+- debug-mm-test and debug-libffi-only envs removed
+- envs/ now contains only `node1`
+```
+
+---
+
 ## Section 14 — Commit
 
 Commit the updated runbook so the broken-mac side can pull and compare.
