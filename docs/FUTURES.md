@@ -230,6 +230,95 @@ An alternative (or complement) to a shared runtime: formalize the implicit contr
 
 **Where to document it:** Expand the "Script conventions" section of `docs/ARCHITECTURE.md` into a full contract specification. The current section covers the header and output prefixes but doesn't specify detection order, idempotency patterns, or verification requirements.
 
+### Drop the conda ecosystem and standardize on mise
+
+**The observation.** The runbooks use a conda-family package manager (micromamba on Windows, miniconda on macOS) to install three developer tools: `nodejs`, `python`, `gh`. None of those three require `conda-forge` specifically — they're first-class in every mainstream package ecosystem. We're paying every conda-ecosystem cost (libmamba bugs, the ToS dance on `pkgs/main`, shell init hooks, channel priority config, 300 MB of metadata caches, a per-platform env manager split) for a use case where `conda-forge` isn't earning its keep.
+
+This idea is to drop the conda ecosystem from the runbook entirely and standardize on [**mise**](https://mise.jdx.dev/) (formerly `rtx`): a Rust-based, asdf-compatible, cross-platform tool version manager.
+
+**Why mise specifically.**
+
+- Mature: 1.0+, actively developed, used in real production environments.
+- Genuinely cross-platform: native Windows, native macOS, native Linux (including Fedora). One install story per platform, one CLI, one config format.
+- Does not use `libmamba` or `reproc`, so it cannot hit the bug tracked in `macos_micromamba_debug_runbook.md` or anything in that family.
+- Uses `conda-forge` for nothing, so the Anaconda ToS dance and `conda config --override-channels` workarounds disappear.
+- Small (~15 MB binary). No Python runtime. No metadata cache.
+- Plugin ecosystem covers `nodejs`, `python`, `gh`, and ~400+ other common tools via mise's own and asdf-compatible plugins.
+
+**What the runbook would look like.**
+
+`conda-env-runbook.md` — currently ~500 lines with platform-specific install, shell init, channel config, Section 0 removal logic, known-issues tables, and the libmamba fallback machinery — collapses to something like:
+
+```markdown
+# Tool Setup Runbook (mise)
+
+1. Install mise
+   macOS:    brew install mise
+   Windows:  winget install jdx.mise
+   Fedora:   dnf install mise   (or: curl https://mise.run | sh)
+
+2. Add mise to your shell
+   echo 'eval "$(mise activate zsh)"' >> ~/.zshrc         # macOS / Fedora
+   Add-Content $PROFILE 'mise activate pwsh | Out-String | Invoke-Expression'  # Windows
+
+3. Install the tools
+   mise use -g node@lts python@3.12 gh@latest
+
+4. Verify
+   node --version
+   python --version
+   gh --version
+```
+
+That's the whole runbook. No Section 0, no create-env, no shell-integration verification, no channel config, no known-issues table — because none of those concerns exist in mise.
+
+**Script impact.** Many of the scripts tracked above become unnecessary:
+
+| Script | Status after mise migration |
+|---|---|
+| `scripts/mac/remove-conda.sh` | Obsolete (keep in archive/) |
+| `scripts/mac/remove-micromamba.sh` | Obsolete (keep in archive/) |
+| `scripts/mac/create-env.sh` | Obsolete — replaced by `mise use -g` |
+| `scripts/mac/verify-shell-integration.sh` | Trivial / unnecessary |
+| `scripts/windows/remove-conda.ps1` | Obsolete |
+| `scripts/windows/fix-path-registry.ps1` | Obsolete (no PATH registry mangling needed) |
+| `scripts/windows/micromamba-shell-init.ps1` | Obsolete |
+| `scripts/windows/create-env.ps1` | Obsolete |
+| `scripts/windows/verify-shell-integration.ps1` | Trivial / unnecessary |
+| `scripts/mac/verify-prerequisites.sh` | Still needed, simplified (checks mise instead of conda) |
+| `scripts/windows/verify-prerequisites.ps1` | Still needed, simplified |
+
+New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and optionally `install-tools.sh` / `install-tools.ps1` wrapping `mise use -g`.
+
+**What we would give up.**
+
+1. **Named environments as a concept.** mise doesn't have `node1`-as-a-named-collection. It thinks in terms of "which version of `node` is on PATH in this directory (or globally)." If we ever want a named collection of tools, we'd fake it with a directory that has a `.mise.toml` in it. Most day-to-day dev work treats "node, python, gh are available" as the goal, which mise handles directly.
+
+2. **Explicit activation.** No more `conda activate node1` / `micromamba activate node1`. Tools are just on PATH, and mise switches versions automatically when you `cd` between directories with different `.mise.toml` files. Most people call this an upgrade; anyone who liked the explicit "enter the env" ritual would miss it.
+
+3. **Conda-forge as an escape hatch.** If we ever need a package that's only available (or meaningfully better) on conda-forge — e.g., a pre-built scientific Python stack with tuned MKL, or R with its conda-forge toolchain, or a bioinformatics tool — mise does not cover that. We would need to add a conda-family tool alongside mise for that one use case, or use [uv](https://github.com/astral-sh/uv) (Python-specific, covers most of what pip can't). As of 2026-04-08 the runbook has not needed conda-forge-specific packages; this is a hypothetical future need.
+
+4. **The miniconda migration we just did.** `conda-env-runbook.md`, the new `remove-micromamba.sh`, the rewritten `create-env.sh`, the verify-prerequisites updates, and the memory policy files are all recent work against the conda-family abstraction. A mise migration would move all of it to an archive state. That churn is real.
+
+**Why this is in FUTURES and not implemented now.**
+
+- **We just finished a macOS → miniconda migration on 2026-04-08.** Doing a second migration of the same runbook a week later is avoidable churn. The current state works end-to-end and there's no active pain point.
+- **A mise migration is a bigger lift than the miniconda one was.** The miniconda switch kept the overall conda-family architecture; swapping to mise rewrites the whole environment section of the runbook and obsoletes half the scripts. Not a blocker, but enough to not do it on a whim.
+- **Adding Fedora to the runbook collection is the natural trigger for this conversation.** Right now we have two platforms with two tools; the platform-consistency payoff of mise is modest. Adding a third platform-tool pair is when the cross-platform simplification actually earns its keep.
+
+**What would make me revisit this sooner rather than later.**
+
+1. **Fedora setup runbook work begins.** That's the strongest case for "stop paying the per-platform env manager tax and consolidate."
+2. **Miniconda hits its own macOS regression.** Not impossible — macOS 26 already bit us once. If conda starts chasing its own version-dependent breakage the way micromamba did, the "conda is stable, mise is young" framing weakens.
+3. **A new tool needs to be added to `node1`** and the friction of "edit the runbook, edit the create-env script, edit the spec-file, run create-env --recreate" vs. "`mise use -g new-tool`" becomes annoying enough to matter.
+
+**Low-commitment next step when we do pick this up.** Don't migrate the main runbook. Instead:
+
+1. 10-minute prototype: `brew install mise`, `mise use -g node@lts python@3.12 gh@latest`, verify the three tools work, uninstall if it feels wrong.
+2. If the feel is right, write a parallel `mise-env-runbook.md` as a draft alongside `conda-env-runbook.md`. Both are available; pick one when the next fresh machine needs setup.
+3. Use the mise runbook on the next fresh machine. See if it's actually better in practice.
+4. If yes, retire `conda-env-runbook.md` and move the conda scripts into `scripts/archive/`. If no, walk away — no harm done.
+
 ### Runbook diffing between machines
 
 When setting up a second machine, it would be useful to compare what's installed on the new machine vs. an already-configured reference machine. The `verify-prerequisites` script output is structured enough to diff, but there's no tooling to capture a baseline and compare against it.
