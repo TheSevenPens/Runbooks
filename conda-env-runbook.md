@@ -1,26 +1,37 @@
-# Micromamba Environment Setup Runbook
+# Environment Setup Runbook
 
 > **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the environment runbook at conda-env-runbook.md. Walk me through each section, automate what you can, and tell me when I need to do something manually."*
 >
-> **Prerequisites (Windows):** The following should already be installed. If not, see [setup-runbook-windows.md](setup-runbook-windows.md).
+> **Platform policy:**
+>
+> | Platform | Environment manager | Why |
+> |---|---|---|
+> | Windows | **micromamba** | Standard. Fast, single binary, works reliably. |
+> | macOS | **miniconda** | micromamba's `libmamba::codesign()` fails with `Could not codesign executable: Invalid argument` during the linking phase on macOS 26 due to a `reproc::env::empty` bug. Confirmed broken on macOS 26.3.1 and 26.4. Not fixed upstream. See [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15 for the full root-cause writeup. |
+>
+> **Prerequisites (Windows):** see [setup-runbook-windows.md](setup-runbook-windows.md).
 > - **Git for Windows** — provides Git Bash, needed for bash shell init
 > - **winget** — ships with Windows 11; on Windows 10, install via Microsoft Store
 >
-> **Prerequisites (macOS):** The following should already be installed. If not, see [setup-runbook-mac.md](setup-runbook-mac.md).
-> - **Homebrew** — used to install Micromamba
+> **Prerequisites (macOS):** see [setup-runbook-mac.md](setup-runbook-mac.md).
+> - **Homebrew** — used to install Miniconda
 > - **Git** — install via Homebrew (recommended) or use Apple Git from Xcode CLI tools
 >
 > 📝 **Quick check (macOS):** Run `scripts/mac/verify-prerequisites.sh` to check what's already installed before starting.
 
 ---
 
-## Section 0 — Remove Conda (if installed)
+## Section 0 — Remove the wrong env manager (if present)
+
+Each platform has a standard env manager (Windows: micromamba, macOS: miniconda). Before installing the correct one, remove the *other* one if it's somehow present — keeping both causes shell hook conflicts and confusion.
+
+### Windows — Remove Conda (if installed)
 
 > ⚠️ **Claude Code note:** If Miniconda/Anaconda is already installed, remove it before proceeding. Keeping both conda and micromamba causes CMD shell hook conflicts — both `conda_hook.bat` and `mamba_hook.bat` use an `IF DEFINED CONDA_SHLVL GOTO :EOF` guard, so whichever loads second in the CMD AutoRun chain silently fails.
 >
 > ⚠️ **Claude Code note:** **Check where `micromamba.exe` lives before removing conda.** If micromamba was installed while conda was present, the binary may live inside `miniconda3\Scripts\` rather than the canonical `AppData\Local\micromamba\`. Removing conda in this case deletes the micromamba binary, breaking the `.bat` wrapper and all shell hooks that reference `MAMBA_EXE`. The `remove-conda.ps1` script detects this and reinstalls micromamba to the canonical location automatically, but if running manual steps, reinstall micromamba first.
 
-### Windows
+#### Windows details
 
 > 📝 **Script available:** Run `scripts/windows/remove-conda.ps1` to automate all Windows steps below (backup, uninstall, cleanup, verification) in one shot:
 > ```bash
@@ -66,43 +77,43 @@ conda --version   # should fail: not recognized
 
 </details>
 
-### macOS
+### macOS — Remove Micromamba (if installed)
 
-> 📝 **Script available:** Run `scripts/mac/remove-conda.sh` to automate all macOS steps below (backup, uninstall, cleanup, verification) in one shot:
+> 📝 **Script available:** Run `scripts/mac/remove-micromamba.sh` to automate all macOS steps below (brew uninstall, standalone binary removal, root prefix cleanup, shell hook removal, verification) in one shot:
 > ```bash
-> bash scripts/mac/remove-conda.sh
+> bash scripts/mac/remove-micromamba.sh
 > ```
+>
+> The script is idempotent — safe to run on a machine that has never had micromamba.
 
 <details>
 <summary>Manual steps (if not using the script)</summary>
 
-#### 0a. Back up existing environments
+#### 0a. Uninstall via brew (if brew-managed)
 ```zsh
-conda env list
-cp -r ~/miniconda3/envs ~/envs-backup
+brew uninstall micromamba
 ```
 
-#### 0b. Uninstall Miniconda
+#### 0b. Remove standalone binary (if present)
 ```zsh
-brew uninstall miniconda
+rm -f ~/.local/bin/micromamba
 ```
 
-#### 0c. Clean up remaining files
+#### 0c. Remove the root prefix and any envs inside it
 ```zsh
-rm -rf ~/miniconda3
-rm -f ~/.condarc
+rm -rf ~/micromamba
 ```
 
 #### 0d. Clean up shell hooks
-Remove the `# >>> conda initialize >>>` block from `~/.zshrc` and/or `~/.bash_profile`. Micromamba shell init (Section 1b) will write fresh hooks.
+Remove the `# >>> mamba initialize >>>` block from `~/.zshrc` and `~/.bash_profile`. Conda shell init (Section 1 macOS) will write fresh conda hooks.
 
 </details>
 
 ---
 
-## Section 1 — Micromamba
+## Section 1 — Install the environment manager
 
-### Windows
+### Windows — Micromamba
 
 #### 1a. Install Micromamba
 ```powershell
@@ -145,29 +156,46 @@ Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -U
 
 </details>
 
-### macOS
+### macOS — Miniconda
 
-#### 1a. Install Micromamba
+> ⚠️ **Claude Code note:** macOS does not install micromamba. See the Platform policy table in the header for why.
+
+#### 1a. Install Miniconda via Homebrew
 ```zsh
-brew install micromamba
+brew install --cask miniconda
 ```
 
-> 📝 **Note:** Homebrew handles the binary placement and PATH. No manual copy or PATH workaround is needed on macOS.
+> 📝 **Note:** `brew install --cask miniconda` installs into `/opt/homebrew/Caskroom/miniconda/base/` on Apple Silicon (`/usr/local/Caskroom/...` on Intel) and symlinks `/opt/homebrew/bin/conda`. No manual PATH workaround is needed.
 
-#### 1b. Initialize micromamba shell hooks for all shells (macOS)
+#### 1b. Initialize conda shell hooks for zsh and bash
 ```zsh
-micromamba shell init -s zsh -r ~/micromamba
-micromamba shell init -s bash -r ~/micromamba
+/opt/homebrew/Caskroom/miniconda/base/bin/conda init zsh bash
 ```
-> 📝 **What each does:**
-> - `zsh` — modifies `~/.zshrc`
-> - `bash` — modifies `~/.bash_profile` or `~/.bashrc`
+
+> 📝 **What this does:** Adds a `# >>> conda initialize >>>` block to `~/.zshrc` and `~/.bash_profile`.
 >
-> ⚠️ **Manual step:** Close and reopen your terminal after running these.
+> ⚠️ **Manual step:** Close and reopen your terminal after running this.
 
-### Cross-platform
+#### 1c. Configure conda-forge only (avoid Anaconda ToS prompt)
 
-#### Verify
+Modern conda requires accepting Anaconda's Terms of Service for the default channels (`repo.anaconda.com/pkgs/main`, `pkgs/r`). This repo only uses conda-forge, so remove defaults entirely and set strict channel priority:
+
+```zsh
+conda config --remove-key channels 2>/dev/null; \
+conda config --add channels conda-forge && \
+conda config --set channel_priority strict
+```
+
+> 📝 **Note:** `scripts/mac/create-env.sh` also applies this config on every run, so it's idempotent.
+
+#### 1d. Verify
+```zsh
+conda --version
+```
+
+### Cross-platform (Windows only)
+
+On Windows, verify the micromamba install:
 ```sh
 micromamba --version
 ```
@@ -178,34 +206,30 @@ micromamba --version
 
 > 📝 **Note:** Skip this section on a fresh machine with no previous environments to restore.
 
-If you backed up environments in Section 0, restore them into micromamba's envs directory:
-
 ### Windows
+
+If you backed up environments in Section 0 (Windows side), restore them into micromamba's envs directory:
+
 ```powershell
 # Copy each environment (not base) into micromamba's envs directory
 Copy-Item -Recurse "$env:USERPROFILE\envs-backup\*" "$env:USERPROFILE\micromamba\envs\"
 ```
 
-### macOS
-```zsh
-cp -r ~/envs-backup/* ~/micromamba/envs/
-```
-
 > ⚠️ **Claude Code note:** Restored environments must contain a `conda-meta` directory to be recognized by micromamba. If an environment shows files but `micromamba env list` doesn't list it, delete and recreate it (see Section 3).
 
 After restoring, verify:
-```sh
+```powershell
 micromamba env list
 ```
 
 Clean up the backup once verified:
-```sh
-# Windows
+```powershell
 Remove-Item -Recurse -Force "$env:USERPROFILE\envs-backup"
-
-# macOS
-rm -rf ~/envs-backup
 ```
+
+### macOS
+
+> ⚠️ **Claude Code note:** Do not bulk-copy micromamba envs from `~/micromamba/envs/` into conda's envs directory. Conda and micromamba write compatible `conda-meta/` contents *most of the time*, but the env's internal paths are hardcoded into activation scripts and many dylibs — moving the directory breaks them. **On macOS, recreate environments from scratch with Section 3** rather than restoring. If you want repeatable recreation, export the spec first and re-use it: `micromamba env export -n <name> > <name>.yml` (on the old machine, before `remove-micromamba.sh`), then `bash scripts/mac/create-env.sh --name <name> --spec-file <name>.yml` on the new setup.
 
 ---
 
@@ -246,14 +270,22 @@ gh --version
 > ```bash
 > bash scripts/mac/create-env.sh --name node1 --packages nodejs,python,gh
 > ```
-> The script checks if the environment already exists (skips if so), creates it, and verifies all packages. Use `--recreate` to replace an existing environment. Supports `--spec-file` for YAML spec files.
+> The script locates conda, ensures conda-forge is the only channel with strict priority, checks if the environment already exists (skips if so), creates it with `--override-channels -c conda-forge`, and verifies all packages. Use `--recreate` to replace an existing environment. Supports `--spec-file` for YAML spec files.
 
 <details>
 <summary>Manual steps (if not using the script)</summary>
 
-```sh
-micromamba create -n node1 -c conda-forge nodejs python gh -y
-micromamba activate node1
+```zsh
+# One-time channel config (also done by create-env.sh)
+conda config --remove-key channels 2>/dev/null
+conda config --add channels conda-forge
+conda config --set channel_priority strict
+
+# Create the env, forcing conda-forge only
+conda create -n node1 --override-channels -c conda-forge nodejs python gh -y
+
+# Verify
+conda activate node1
 node --version
 python --version
 gh --version
@@ -267,7 +299,7 @@ gh --version
 
 > 🤔 **Claude Code: Always run this verification and show the results to the user as a summary table.**
 
-Test that `micromamba activate` works in every shell. Check that the command is recognized (not just that the binary is on PATH — the shell hook must be functional).
+Test that the env manager's `activate` command works in every shell. Check that the command is recognized (not just that the binary is on PATH — the shell hook must be functional). Windows tests `micromamba activate`, macOS tests `conda activate`.
 
 ### Windows
 
@@ -290,10 +322,10 @@ Test that `micromamba activate` works in every shell. Check that the command is 
 
 | Shell | Test command | What to check |
 |---|---|---|
-| zsh | `zsh -i -c "micromamba activate base && echo 'works'"` | Command succeeds without error |
-| bash | `bash -l -i -c "micromamba activate base && echo 'works'"` | Command succeeds without error |
+| zsh | `zsh -i -c "conda activate base && echo 'works'"` | Command succeeds without error |
+| bash | `bash -l -i -c "conda activate base && echo 'works'"` | Command succeeds without error |
 
-> ⚠️ **Claude Code note:** Shell hooks only load in interactive shells. Use `zsh -i` (not `zsh -l`) for zsh. For bash on macOS, use `bash -l -i` — the `-l` is needed because micromamba init blocks are in `~/.bash_profile` (login shell), and `-i` is needed for the hooks to activate. Terminal.app and iTerm2 open login shells by default, so this matches real-world usage.
+> ⚠️ **Claude Code note:** Shell hooks only load in interactive shells. Use `zsh -i` (not `zsh -l`) for zsh. For bash on macOS, use `bash -l -i` — the `-l` is needed because conda init blocks are in `~/.bash_profile` (login shell), and `-i` is needed for the hooks to activate. Terminal.app and iTerm2 open login shells by default, so this matches real-world usage.
 
 Present results to the user in this format:
 
@@ -309,90 +341,13 @@ Present results to the user in this format:
 
 **macOS:**
 ```
-| Shell | micromamba activate |
-|-------|---------------------|
-| zsh   | works / broken      |
-| bash  | works / broken      |
+| Shell | conda activate |
+|-------|----------------|
+| zsh   | works / broken |
+| bash  | works / broken |
 ```
 
 > 📝 **Note:** Some shells may require closing and reopening after init. If a shell fails, re-run the relevant init command from Section 1 and retest.
-
----
-
-## Section 5 — Exception: macOS libmamba fallback (conda)
-
-> ⚠️ **This section is an EXCEPTION, not the standard path.**
->
-> The standard setup on both Windows and macOS is **micromamba only** — conda is intentionally removed (see Section 0). Use this fallback **only** if `micromamba create` fails with the libmamba `Could not codesign executable: Invalid argument` bug on macOS 26.x (see Notes & Known Issues → macOS). Do not use this section on Windows, and do not use it on macOS unless the micromamba path has been verified broken on the specific machine.
->
-> If you use this fallback, **document it as machine-specific in your Status Tracker**. Retry micromamba after each libmamba/macOS update — the goal is to return to the standard path when the upstream bug is fixed.
-
-### 5a. Install Miniconda via Homebrew
-
-```zsh
-brew install --cask miniconda
-```
-
-### 5b. Remove conflicting micromamba shell init
-
-Remove the `# >>> mamba initialize >>>` block from `~/.zshrc` and `~/.bash_profile`. Conda and micromamba hooks can coexist in principle, but since the micromamba path is known broken on this machine, keeping its hooks only causes confusion.
-
-### 5c. Initialize conda shell hooks
-
-```zsh
-/opt/homebrew/Caskroom/miniconda/base/bin/conda init zsh bash
-```
-
-This adds a `# >>> conda initialize >>>` block to `~/.zshrc` and `~/.bash_profile`.
-
-> ⚠️ **Manual step:** Close and reopen your terminal after running init.
-
-### 5d. Configure conda-forge only (avoid Anaconda ToS prompt)
-
-Modern conda requires accepting Anaconda's Terms of Service for the default channels (`repo.anaconda.com/pkgs/main`, `pkgs/r`). We only want conda-forge, so remove defaults entirely and set strict channel priority:
-
-```zsh
-conda config --remove-key channels 2>/dev/null; \
-conda config --add channels conda-forge && \
-conda config --set channel_priority strict
-```
-
-### 5e. Create the `node1` environment
-
-Use `--override-channels` to force conda to ignore any stray defaults reference:
-
-```zsh
-conda create -n node1 --override-channels -c conda-forge nodejs python gh -y
-```
-
-### 5f. Verify
-
-```zsh
-conda activate node1
-node --version
-python --version
-gh --version
-```
-
-### 5g. Shell integration check
-
-| Shell | Test command | What to check |
-|---|---|---|
-| zsh  | `zsh -i -c "conda activate node1 && which node"`         | Prints a path under `/opt/homebrew/Caskroom/miniconda/base/envs/node1/bin` |
-| bash | `bash -l -i -c "conda activate node1 && which node"`     | Same |
-
-### 5h. Revisit micromamba periodically
-
-After future libmamba releases (`brew upgrade micromamba`) or macOS updates, retry the standard path:
-
-```zsh
-brew install micromamba
-micromamba shell init -s zsh -r ~/micromamba
-# Reopen terminal
-micromamba create -n node1-test -c conda-forge nodejs python gh -y
-```
-
-If it succeeds, you can migrate back to the standard path — uninstall miniconda, remove its shell init blocks, and update your Status Tracker to remove the exception flag.
 
 ---
 
@@ -416,10 +371,10 @@ If it succeeds, you can migrate back to the standard path — uninstall minicond
 
 | Issue | Fix |
 |---|---|
-| `micromamba` not found after brew install | Run `micromamba shell init -s zsh -r ~/micromamba`, then open a new terminal |
-| Shell init modifies wrong file | Ensure you're running init for the correct shell (`zsh` for macOS default, not `bash`) |
-| Migrating from standalone micromamba to brew | Install via brew, re-run `micromamba shell init` to update `MAMBA_EXE` path in `.zshrc`/`.bash_profile`, then remove the old binary (e.g., `~/.local/bin/micromamba`). The `~/micromamba` root prefix and existing environments are preserved. |
-| `critical libmamba Could not codesign executable: Invalid argument` during `micromamba create` (macOS 26.x / Tahoe) | **Machine-specific libmamba bug.** Reproduced on a clean macOS 26.4 install with CLT 26.4.0, micromamba 2.5.0 from brew and standalone 1.5.10. Fails on the first Mach-O binary during the linking phase; `codesign -s - --force` on the same file from the shell succeeds, so it is not the OS `codesign` tool. libmamba uses Security.framework's `com.apple.CodeSigningHelper.xpc` directly (not fork/exec of `codesign`), and that code path returns EINVAL. **Not fixed by:** updating macOS, updating CLT, `CONDA_OVERRIDE_OSX`, `CONDA_SOLVER=classic`, switching micromamba versions. Verified working on another Tahoe Mac — machine-specific, not OS-wide. **Workaround:** use the macOS conda fallback path (see Section 5 — Exception: macOS libmamba fallback). Pixi (`brew install pixi`) also works but is not currently part of the runbook. |
+| Why does macOS use miniconda instead of micromamba? | libmamba 2.5.0's `codesign()` fork/execs `/usr/bin/codesign` via `reproc::run()` with `reproc::env::empty`. On macOS 26, reproc returns `EINVAL` from that spawn even though `codesign` actually runs and correctly ad-hoc signs the file. libmamba checks reproc's `ec` rather than codesign's exit code and throws `Could not codesign executable: Invalid argument`, aborting the install. Confirmed broken on 26.3.1 and 26.4; not fixed on libmamba `main`. Full root-cause writeup and reproducer: [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15. |
+| Is the macOS libmamba bug still broken? | Re-run `macos_micromamba_debug_runbook.md` Section 7 on any macOS machine after a `brew upgrade micromamba` or a macOS point release. If it now succeeds, the upstream bug is likely fixed and macOS can return to micromamba. |
+| `conda create` complains about Anaconda ToS | Conda now prompts to accept Terms of Service for `repo.anaconda.com/pkgs/main` and `pkgs/r`. This repo only uses conda-forge; Section 1c configures conda to drop defaults entirely, and `scripts/mac/create-env.sh` re-applies that config on every run and passes `--override-channels` to force conda-forge only. |
+| Conda init modifies `~/.zshrc` and `~/.bash_profile` | Expected. `conda init zsh bash` writes `# >>> conda initialize >>>` blocks to both. `scripts/mac/remove-micromamba.sh` correctly removes the *mamba* block without touching the conda block. |
 
 ### Cross-platform
 
@@ -466,27 +421,17 @@ If it succeeds, you can migrate back to the standard path — uninstall minicond
 ```markdown
 # conda-env-runbook status — macOS
 
-- [ ] Conda removed (if previously installed)
-- [ ] Environments backed up (if migrating from conda)
-- [ ] Conda shell hooks cleaned up
-- [ ] Micromamba installed via Homebrew
-- [ ] Micromamba shell init completed (zsh, bash)
-- [ ] Micromamba verified (`micromamba --version`)
-- [ ] Environments restored (if migrating from conda)
-- [ ] Shell integration verified across all shells (table shown to user)
-- [ ] Environment `node1` created
+- [ ] Micromamba removed (if previously installed) — `scripts/mac/remove-micromamba.sh`
+- [ ] `# >>> mamba initialize >>>` blocks gone from .zshrc and .bash_profile
+- [ ] Miniconda installed via `brew install --cask miniconda`
+- [ ] Conda shell init completed (`conda init zsh bash`)
+- [ ] conda-forge set as only channel with strict priority (Section 1c)
+- [ ] Conda verified (`conda --version`)
+- [ ] Shell integration verified across zsh and bash (table shown to user)
+- [ ] Environment `node1` created via `scripts/mac/create-env.sh`
 - [ ] node verified in node1
 - [ ] python verified in node1
 - [ ] gh verified in node1
-
-## If Section 5 exception path was used (libmamba codesign bug):
-- [ ] EXCEPTION FLAG: this machine is on the conda fallback, not standard micromamba
-- [ ] Miniconda installed via brew cask
-- [ ] Micromamba shell init blocks removed from .zshrc and .bash_profile
-- [ ] conda init zsh bash completed
-- [ ] conda-forge set as only channel with strict priority
-- [ ] `node1` created with `--override-channels -c conda-forge`
-- [ ] Reminder: retry standard micromamba path after next `brew upgrade micromamba` or macOS update
 ```
 
 </details>

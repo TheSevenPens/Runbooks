@@ -37,11 +37,15 @@ detect_git_source() {
     esac
 }
 
-detect_micromamba_source() {
+detect_conda_source() {
     local path="$1"
-    case "$path" in
-        /opt/homebrew/*) echo "homebrew" ;;
-        */.local/bin/micromamba) echo "standalone" ;;
+    # Resolve symlinks — `brew install --cask miniconda` links
+    # /opt/homebrew/bin/conda → .../Caskroom/miniconda/base/condabin/conda
+    local resolved
+    resolved="$(readlink -f "$path" 2>/dev/null || readlink "$path" 2>/dev/null || echo "$path")"
+    case "$resolved" in
+        /opt/homebrew/Caskroom/miniconda/*|/usr/local/Caskroom/miniconda/*) echo "homebrew-cask" ;;
+        "$HOME/miniconda3/"*) echo "direct-installer" ;;
         *) echo "unknown" ;;
     esac
 }
@@ -74,49 +78,52 @@ else
     FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
-# --- Check: conda (should NOT be present) ---
+# --- Check: micromamba (should NOT be present on macOS) ---
+#
+# macOS uses miniconda instead of micromamba because of a libmamba codesign
+# bug on macOS 26 (see macos_micromamba_debug_runbook.md). If micromamba is
+# detected, warn and recommend removal via scripts/mac/remove-micromamba.sh.
 
-if command -v conda &>/dev/null; then
-    conda_path="$(command -v conda)"
-    conda_version="$(conda --version 2>/dev/null | sed 's/conda //')"
-    echo "WARN: conda ${conda_version} found at ${conda_path} — should be removed (micromamba-only setup)"
-else
-    echo "OK: conda not present (expected — micromamba-only setup)"
-fi
-
-# --- Check: micromamba ---
-
-# micromamba may be a shell function (not visible to `command -v` in a non-interactive shell).
-# Check MAMBA_EXE first, then command lookup, then brew cellar as canonical path fallback.
-mm_path=""
-mm_version=""
-mm_source=""
-
+mm_found=false
 if [[ -n "${MAMBA_EXE:-}" && -x "${MAMBA_EXE:-}" ]]; then
-    mm_path="$MAMBA_EXE"
+    echo "WARN: micromamba found at ${MAMBA_EXE} — should be removed (macOS uses miniconda). Run: bash scripts/mac/remove-micromamba.sh"
+    mm_found=true
 elif command -v micromamba &>/dev/null; then
-    mm_path="$(command -v micromamba)"
-else
-    # Canonical path fallback: check the brew cellar directly
-    brew_mm="/opt/homebrew/opt/micromamba/bin/micromamba"
-    if [[ -x "$brew_mm" ]]; then
-        mm_path="$brew_mm"
-    fi
+    mm_path_now="$(command -v micromamba)"
+    echo "WARN: micromamba found at ${mm_path_now} — should be removed (macOS uses miniconda). Run: bash scripts/mac/remove-micromamba.sh"
+    mm_found=true
+elif command -v brew &>/dev/null && brew list micromamba &>/dev/null 2>&1; then
+    echo "WARN: micromamba installed via brew — should be removed (macOS uses miniconda). Run: bash scripts/mac/remove-micromamba.sh"
+    mm_found=true
 fi
 
-if [[ -n "$mm_path" ]]; then
-    mm_version="$("$mm_path" --version 2>/dev/null)"
-    mm_source="$(detect_micromamba_source "$mm_path")"
+if [[ "$mm_found" == false ]]; then
+    echo "OK: micromamba not present (expected — macOS uses miniconda due to libmamba codesign bug on macOS 26)"
+fi
 
-    if [[ "$mm_source" == "standalone" ]]; then
-        echo "WARN: micromamba ${mm_version} (${mm_path}) [${mm_source}] — brew version recommended"
-    elif [[ -z "${MAMBA_EXE:-}" ]]; then
-        echo "OK: micromamba ${mm_version} (${mm_path}) [${mm_source}] — note: MAMBA_EXE not set in this shell"
+# --- Check: conda (should be present on macOS) ---
+
+conda_path=""
+if [[ -n "${CONDA_EXE:-}" && -x "${CONDA_EXE:-}" ]]; then
+    conda_path="$CONDA_EXE"
+elif command -v conda &>/dev/null; then
+    conda_path="$(command -v conda)"
+elif [[ -x "/opt/homebrew/Caskroom/miniconda/base/bin/conda" ]]; then
+    conda_path="/opt/homebrew/Caskroom/miniconda/base/bin/conda"
+elif [[ -x "/usr/local/Caskroom/miniconda/base/bin/conda" ]]; then
+    conda_path="/usr/local/Caskroom/miniconda/base/bin/conda"
+fi
+
+if [[ -n "$conda_path" ]]; then
+    conda_version="$("$conda_path" --version 2>/dev/null | sed 's/conda //')"
+    conda_source="$(detect_conda_source "$conda_path")"
+    if [[ -z "${CONDA_EXE:-}" ]]; then
+        echo "OK: conda ${conda_version} (${conda_path}) [${conda_source}] — note: CONDA_EXE not set in this shell"
     else
-        echo "OK: micromamba ${mm_version} (${mm_path}) [${mm_source}]"
+        echo "OK: conda ${conda_version} (${conda_path}) [${conda_source}]"
     fi
 else
-    echo "FAIL: micromamba not found — install with: brew install micromamba"
+    echo "FAIL: conda not found — install with: brew install --cask miniconda"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
@@ -127,9 +134,9 @@ if [[ -n "$ENV_NAME" ]]; then
     echo "--- Environment: ${ENV_NAME} ---"
 
     env_path=""
-    # Find the environment via micromamba
-    if [[ -n "$mm_path" ]]; then
-        env_path="$("$mm_path" env list 2>/dev/null | grep "^${ENV_NAME} " | awk '{print $NF}' || true)"
+    # Find the environment via conda
+    if [[ -n "$conda_path" ]]; then
+        env_path="$("$conda_path" env list 2>/dev/null | awk -v n="$ENV_NAME" '$1==n {print $NF}' || true)"
     fi
 
     if [[ -z "$env_path" ]]; then

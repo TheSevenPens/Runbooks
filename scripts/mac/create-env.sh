@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# create-env.sh — Create a micromamba environment with specified packages (idempotent)
+# create-env.sh — Create a conda environment with specified packages (idempotent)
+#
+# On macOS this repo uses miniconda (not micromamba) because of a libmamba
+# codesign bug on macOS 26. See macos_micromamba_debug_runbook.md for
+# root cause. The Windows equivalent of this script uses micromamba.
 #
 # Usage:
 #   bash create-env.sh --name node1 --packages nodejs,python,gh
@@ -14,10 +18,11 @@
 #   --recreate    Remove and recreate the environment if it already exists
 #
 # Actions:
-#   1. Locate micromamba binary
-#   2. Check if environment already exists (skip or recreate)
-#   3. Create environment with specified packages
-#   4. Verify each package is installed and report versions
+#   1. Locate conda binary (brew cask miniconda preferred)
+#   2. Ensure conda-forge is the only configured channel with strict priority
+#   3. Check if environment already exists (skip or recreate)
+#   4. Create environment using `conda create --override-channels -c conda-forge`
+#   5. Verify each package is installed and report versions
 #
 # Output: Structured lines prefixed with OK / SKIP / FAIL / INFO / WARN
 # Exit code: 0 on success, 1 on failure
@@ -55,22 +60,54 @@ if [[ -z "$PACKAGES" && -z "$SPEC_FILE" ]]; then
     exit 2
 fi
 
-# --- Locate micromamba binary ---
+# --- Locate conda binary ---
+#
+# Preferred order:
+#   1. CONDA_EXE env var (set by `conda init` hooks)
+#   2. `conda` on PATH
+#   3. brew cask miniconda canonical path
 
-MM_EXE=""
+CONDA_EXE_BIN=""
 
-if command -v micromamba &>/dev/null; then
-    MM_EXE="$(command -v micromamba)"
-elif [[ -x "$HOME/.local/bin/micromamba" ]]; then
-    MM_EXE="$HOME/.local/bin/micromamba"
+if [[ -n "${CONDA_EXE:-}" && -x "${CONDA_EXE:-}" ]]; then
+    CONDA_EXE_BIN="$CONDA_EXE"
+elif command -v conda &>/dev/null; then
+    CONDA_EXE_BIN="$(command -v conda)"
+elif [[ -x "/opt/homebrew/Caskroom/miniconda/base/bin/conda" ]]; then
+    CONDA_EXE_BIN="/opt/homebrew/Caskroom/miniconda/base/bin/conda"
+elif [[ -x "/usr/local/Caskroom/miniconda/base/bin/conda" ]]; then
+    CONDA_EXE_BIN="/usr/local/Caskroom/miniconda/base/bin/conda"
 fi
 
-if [[ -z "$MM_EXE" ]]; then
-    echo "FAIL: micromamba not found"
+if [[ -z "$CONDA_EXE_BIN" ]]; then
+    echo "FAIL: conda not found — install with: brew install --cask miniconda"
     exit 1
 fi
 
-echo "INFO: Using micromamba at $MM_EXE"
+echo "INFO: Using conda at $CONDA_EXE_BIN"
+
+# --- Ensure conda is configured for conda-forge only with strict priority ---
+#
+# Modern conda requires accepting Anaconda's Terms of Service for the default
+# channels (repo.anaconda.com/pkgs/main, pkgs/r). We don't want them at all.
+
+echo ""
+echo "--- Ensuring conda-forge-only channel config ---"
+
+# Remove any configured channels key (idempotent — silent if absent)
+"$CONDA_EXE_BIN" config --remove-key channels &>/dev/null || true
+
+if "$CONDA_EXE_BIN" config --add channels conda-forge &>/dev/null; then
+    echo "OK: conda-forge set as the only channel"
+else
+    echo "WARN: Could not set conda-forge as the only channel"
+fi
+
+if "$CONDA_EXE_BIN" config --set channel_priority strict &>/dev/null; then
+    echo "OK: Channel priority set to strict"
+else
+    echo "WARN: Could not set channel_priority=strict"
+fi
 
 # --- Resolve packages ---
 
@@ -125,14 +162,15 @@ echo ""
 echo "--- Checking environment ---"
 
 ENV_EXISTS=false
-if "$MM_EXE" env list 2>/dev/null | grep -qw "$NAME"; then
+# `conda env list` prints `<name> <path>` — match on the first token
+if "$CONDA_EXE_BIN" env list 2>/dev/null | awk '{print $1}' | grep -qx "$NAME"; then
     ENV_EXISTS=true
 fi
 
 if $ENV_EXISTS; then
     if $RECREATE; then
-        echo "INFO: Environment '$NAME' exists - removing for recreate"
-        if "$MM_EXE" env remove -n "$NAME" -y &>/dev/null; then
+        echo "INFO: Environment '$NAME' exists — removing for recreate"
+        if "$CONDA_EXE_BIN" env remove -n "$NAME" -y &>/dev/null; then
             echo "OK: Removed existing environment '$NAME'"
             ENV_EXISTS=false
         else
@@ -145,7 +183,7 @@ if $ENV_EXISTS; then
         echo ""
         echo "--- Verifying packages in existing environment ---"
 
-        installed=$("$MM_EXE" list -n "$NAME" 2>/dev/null)
+        installed=$("$CONDA_EXE_BIN" list -n "$NAME" 2>/dev/null)
 
         if [[ -n "$SPEC_FILE" ]]; then
             mapfile -t verify_pkgs < <(parse_spec_packages "$SPEC_FILE")
@@ -154,8 +192,8 @@ if $ENV_EXISTS; then
         fi
 
         for pkg in "${verify_pkgs[@]}"; do
-            if echo "$installed" | grep -qE "^\s+${pkg}\s"; then
-                version_line=$(echo "$installed" | grep -E "^\s+${pkg}\s" | head -1 | xargs)
+            if echo "$installed" | grep -qE "^${pkg}\s"; then
+                version_line=$(echo "$installed" | grep -E "^${pkg}\s" | head -1 | xargs)
                 echo "OK: $pkg installed ($version_line)"
             else
                 echo "WARN: $pkg not found in environment '$NAME'"
@@ -174,13 +212,13 @@ echo ""
 echo "--- Creating environment '$NAME' ---"
 
 if [[ -n "$SPEC_FILE" ]]; then
-    if ! "$MM_EXE" create -n "$NAME" --file "$SPEC_FILE" -y 2>&1; then
-        echo "FAIL: micromamba create failed"
+    if ! "$CONDA_EXE_BIN" env create -n "$NAME" --file "$SPEC_FILE" 2>&1; then
+        echo "FAIL: conda env create failed"
         exit 1
     fi
 else
-    if ! "$MM_EXE" create -n "$NAME" -c "$CHANNEL" "${CLEAN_PACKAGES[@]}" -y 2>&1; then
-        echo "FAIL: micromamba create failed"
+    if ! "$CONDA_EXE_BIN" create -n "$NAME" --override-channels -c "$CHANNEL" "${CLEAN_PACKAGES[@]}" -y 2>&1; then
+        echo "FAIL: conda create failed"
         exit 1
     fi
 fi
@@ -189,7 +227,7 @@ echo "OK: Environment '$NAME' created"
 
 # --- Verify environment exists ---
 
-if "$MM_EXE" env list 2>/dev/null | grep -qw "$NAME"; then
+if "$CONDA_EXE_BIN" env list 2>/dev/null | awk '{print $1}' | grep -qx "$NAME"; then
     echo "OK: Environment '$NAME' appears in env list"
 else
     echo "FAIL: Environment '$NAME' not found after creation"
@@ -201,7 +239,7 @@ fi
 echo ""
 echo "--- Verifying packages ---"
 
-installed=$("$MM_EXE" list -n "$NAME" 2>/dev/null)
+installed=$("$CONDA_EXE_BIN" list -n "$NAME" 2>/dev/null)
 
 if [[ -n "$SPEC_FILE" ]]; then
     mapfile -t verify_pkgs < <(parse_spec_packages "$SPEC_FILE")
@@ -210,8 +248,8 @@ else
 fi
 
 for pkg in "${verify_pkgs[@]}"; do
-    if echo "$installed" | grep -qE "^\s+${pkg}\s"; then
-        version_line=$(echo "$installed" | grep -E "^\s+${pkg}\s" | head -1 | xargs)
+    if echo "$installed" | grep -qE "^${pkg}\s"; then
+        version_line=$(echo "$installed" | grep -E "^${pkg}\s" | head -1 | xargs)
         echo "OK: $pkg installed ($version_line)"
     else
         echo "FAIL: $pkg not found in environment '$NAME' after creation"

@@ -152,7 +152,7 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 
 ## Section 8 — Micromamba & Environments
 
-> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Micromamba, shell configuration, and creating environments. That runbook covers both Windows and macOS with platform-specific callouts.
+> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing the environment manager, shell configuration, and creating environments. That runbook covers both platforms — on Windows it installs **micromamba**, on macOS it installs **miniconda** (because of a libmamba codesign bug on macOS 26; see the platform policy table at the top of that runbook).
 
 ---
 
@@ -174,8 +174,8 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 | `git --version` shows Apple Git after brew install | Open a new terminal — Homebrew's `/opt/homebrew/bin` should take PATH precedence over `/usr/bin` |
 | `code` command not found after VS Code install | Open VS Code → `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH" |
 | `brew bundle` fails adopting an already-installed cask (Chrome/VS Code/GitHub Desktop) | Pre-existing app bundles cannot be adopted: Chrome/VS Code fail on `sudo chmod` (no TTY for password), GitHub Desktop fails on an xattr write (SIP). Delete the pre-existing app with `sudo rm -rf /Applications/<App>.app` and re-run `bundle-install.sh`. |
-| Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
-| `micromamba create` fails with `Could not codesign executable: Invalid argument` on macOS 26.x | Machine-specific libmamba bug. See [conda-env-runbook.md](conda-env-runbook.md) — macOS Known Issues and Section 5 (conda fallback exception path). |
+| Miniconda / env issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| Why is macOS using miniconda instead of micromamba? | libmamba codesign bug on macOS 26. Root cause and minimal repro in [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15. The setup runbook already removes micromamba if present — see [conda-env-runbook.md](conda-env-runbook.md) Section 0. |
 
 ---
 
@@ -190,6 +190,6 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 - [ ] VS Code verified (`code --version`)
 - [ ] iTerm2 installed (if chosen)
 - [ ] Shell configured (zsh)
-- [ ] Micromamba setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] Miniconda setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
 - [ ] GitHub Desktop signed in (manual)
 - [ ] Chrome signed in (manual)
