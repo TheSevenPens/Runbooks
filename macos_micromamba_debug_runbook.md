@@ -1,30 +1,36 @@
 # macOS Micromamba Debug Runbook
 
-> **Purpose:** Diagnose a machine-specific `libmamba Could not codesign executable: Invalid argument` bug. This runbook is designed to be executed on a **macOS machine where `micromamba create` WORKS**, so we can capture a reference fingerprint and diff it against a broken machine where the same command fails during the linking phase.
+> **Status: root-caused.** This runbook started as a "diff a working Mac against a broken Mac" exercise, but the second Mac we ran it on turned out to also be broken, and the investigation on that machine pinned the root cause. See **Section 15 (Deep dive)** for the full probe trail and **Section 15h** for the one-paragraph summary.
 >
-> **How to use this with Claude Code:** Open Claude Code on the working Mac, point it at this file, and say: *"Follow macos_micromamba_debug_runbook.md end to end. Run every command, fill in the Results blocks in place, and commit the updated runbook. Do not skip sections. If a command needs sudo and I haven't granted it, note that in the Results block and continue."*
+> **One-line root cause:** `libmamba::codesign()` fork/execs `/usr/bin/codesign` via `reproc::run()` with `reproc::env::empty`. On macOS 26, reproc returns `EINVAL` from that spawn even though `/usr/bin/codesign` actually runs to completion and correctly ad-hoc signs the file. libmamba then throws `"Could not codesign executable: " + strerror(EINVAL)` based on reproc's error code and aborts the install — even though the file on disk is already validly signed. Source: `libmamba/src/core/util_os.cpp::codesign()`. **Still present on libmamba `main` as of 2026-04-08 — not fixed upstream.**
 >
-> **Broken-machine context (for comparison):** On the broken Mac (owner: TheSevenPens), we observed:
-> - macOS 26.4 (25E246), Apple Silicon
-> - CLT 26.4.0
-> - `brew install micromamba` → 2.5.0; `micromamba --version` works; `micromamba shell init` works; `micromamba activate base` works
-> - `micromamba create -n node1 -c conda-forge nodejs python gh -y` fails on the very first Mach-O binary during the linking phase with: `critical libmamba Could not codesign executable: Invalid argument`
-> - `codesign -s - --force <same-file>` from the shell succeeds with exit 0 on the exact same binary — so the OS `codesign` tool itself works
-> - `com.apple.CodeSigningHelper.xpc` is visible in `ps` during the failure — libmamba calls Security.framework APIs directly, not fork/exec of `codesign`
-> - Not fixed by: `CONDA_OVERRIDE_OSX`, `CONDA_SOLVER=classic`, OS point update, CLT update, micromamba version change (2.5.0 brew, 1.5.10 standalone)
+> **Confirmed broken environments:**
+> - macOS 26.4 (25E246) / Apple M4 Pro / CLT 26.4.0 / brewed micromamba 2.5.0 (TheSevenPens machine — setup-runbook-mac run)
+> - macOS 26.3.1 (25D2128) / Apple M4 Pro / CLT 26.3.0 / brewed micromamba 2.5.0_3 (sevenpens / lorient.charydishome — this runbook was executed here)
 >
-> We want to find **what is different about the working Mac**.
+> Both machines fail with the exact same error on the very first Mach-O binary of the linking phase. The failure is machine-independent on macOS 26 — it is **not** a machine-specific quirk.
+>
+> **Does not fix the bug:** `CONDA_OVERRIDE_OSX`, `CONDA_SOLVER=classic`, OS point updates (26.3.1 ↔ 26.4), CLT updates, micromamba version changes (2.5.0 brew ↔ 1.5.10 standalone), pre-upgrading the cached libffi signature from CDv=20200 to CDv=20400, single-package isolated repro (`micromamba create -n t -c conda-forge libffi -y` still fails).
+>
+> **Known working alternatives on macOS 26:** `conda install` (vendored Python `subprocess`, normal envp — codepath does not go through reproc), `pixi global install` (Rust rattler — separate code entirely). Both verified working on the TheSevenPens machine.
+>
+> **Current purpose of this runbook:** (1) A reproducible data-collection script that any Claude can run on any mac to confirm the bug and capture a clean fingerprint. (2) Living evidence for an upstream bug report. (3) A place to record per-libmamba-release retries so we can detect when the bug is fixed.
+>
+> **How to use this with Claude Code:** Open Claude Code on any macOS 26 machine where you want to verify / re-verify the bug and say: *"Follow macos_micromamba_debug_runbook.md end to end. Run every command, fill in the Results blocks in place (or add a dated second run below the existing ones), and commit the updated runbook. If any command needs sudo and I haven't granted it, note that in the Results block and continue."*
+>
+> **Known unknowns / next probes:** See Section 15h "Open questions."
 
 ---
 
-## Section 0 — Ground rules for Claude on the working Mac
+## Section 0 — Ground rules for Claude running this runbook
 
-- Run every command, even ones that look redundant. Diffs between two fingerprints only matter if both sides collected the same fields.
-- **Fill in Results blocks in place.** Replace the `<!-- TODO -->` placeholders with actual output. Keep the code fences.
-- Truncate output only if it's clearly unbounded (e.g., a multi-MB log). When truncating, mention it explicitly in the Results block.
-- Do **not** modify existing micromamba installs, env vars, or shell init files. This runbook is read-only except for creating one throwaway test env named `debug-mm-test`.
-- If any command requires sudo and the user hasn't granted it, note "(sudo not granted)" in the Results block and continue. Do not block the whole run on one sudo command.
-- At the end, **commit the updated runbook** with a message like `debug: fingerprint from working micromamba mac`.
+- Run every command, even ones that look redundant. Fingerprint diffs only matter if every run captured the same fields.
+- **Fill in Results blocks in place.** If the block already has results from a prior run, add a new dated subsection **below** the existing results (e.g., `### 1b. Results — 2026-05-12 (libmamba 2.6.0 retry)`) rather than overwriting. The runbook should accumulate history so we can spot the moment upstream fixes the bug.
+- Truncate output only if it's clearly unbounded (e.g., a multi-MB log). When truncating, mention it explicitly.
+- Do **not** modify existing micromamba installs, env vars, or shell init files. This runbook is read-only except for creating one throwaway test env named `debug-mm-test` and (in Section 15) `debug-libffi-only`, both of which must be removed at the end.
+- If any command requires sudo and the user hasn't granted it, note "(sudo not granted)" in the block and continue. Do not block the whole run on one sudo command.
+- **Every new run must re-execute Section 7 (active repro) and record whether it still fails.** If Section 7 now succeeds, the upstream bug is probably fixed — go re-verify by running Section 15c–15d and update Section 15h.
+- At the end, **commit the updated runbook** with a message like `debug: re-run on libmamba X.Y.Z / macOS NN.N — still broken` or `… — fixed!`.
 
 ---
 
@@ -895,6 +901,45 @@ Open questions:
     libmamba patch make the bug go away? → confirms the fix.
   • Is this fixed in a libmamba > 2.5.0? → check newer versions / git HEAD.
 ```
+
+### 15h-supplement. Upstream tracker (added 2026-04-08)
+
+Checked `libmamba/src/core/util_os.cpp::codesign()` at `mamba-org/mamba` branch `main`:
+
+```cpp
+// main branch, fetched 2026-04-08
+void codesign(const fs::u8path& path, bool verbose)
+{
+    reproc::options options;
+    options.env.behavior = reproc::env::empty;        // ← STILL empty envp
+    // ... discard redirects ...
+    const std::vector<std::string> cmd = {
+        "/usr/bin/codesign", "-s", "-f", path.string()   // ← argv differs from 2.5.0
+    };
+    auto [status, ec] = reproc::run(cmd, options);
+    if (ec) {
+        throw std::runtime_error(std::string("Could not codesign executable: ") + ec.message());
+    }
+}
+```
+
+> **The bug is not fixed upstream.** `reproc::env::empty` is still there on `main`.
+>
+> **Argv regression noticed along the way:** the 2.5.0 release passes `{"/usr/bin/codesign","-s","-","-f",path}` — i.e. `codesign -s - -f <path>` — where `-` is the pseudo-identity for ad-hoc signing. On `main` this has changed to `{"/usr/bin/codesign","-s","-f",path}`, which reads as `codesign -s -f <path>` — meaning `-s` is being given `-f` as the identity name, and the path becomes a trailing positional. Either this is wrong and `main` would fail differently if it ever got that far, or there's a newer codesign flag syntax I'm missing. Worth flagging in any upstream report.
+
+**Existing upstream issues that mention this symptom but do NOT pin the root cause:**
+
+- **[conda-forge/miniforge#324 — codesign error](https://github.com/conda-forge/miniforge/issues/324)** — OPEN. First reported June 2022 on macOS 12.4. Same exact error (`Could not codesign executable: Invalid argument`). Recurrences on 13.6.4 and 15.0. Workarounds mentioned in the thread: install micromamba via the upstream shell script instead of Homebrew, and an unrelated `ulimit -n` tweak. **No one in this 2+ year thread has identified that `reproc::env::empty` is the cause.** This is the issue to link our repro to.
+- **[mamba-org/mamba#1758 — could not find macOS version by calling sw_vers](https://github.com/mamba-org/mamba/issues/1758)** — tangentially related. Observed that reproc on macOS can fail to capture output from a trivial `/bin/echo` subprocess, which smells like the same `env::empty` + `posix_spawn` EINVAL path. Not the same symptom but probably the same underlying mechanism.
+- **[mamba-org/mamba#780 — OS X Big Sur / M1 first-run issues](https://github.com/mamba-org/mamba/issues/780)** — touches codesign on Big Sur / M1. Less relevant but in the neighborhood.
+
+**No existing PR is open that drops `env::empty` from `codesign()`.** An upstream PR from us would be the fix.
+
+**Recommended upstream actions (when we get to them):**
+
+1. Post a comment on **miniforge#324** with a pointer to this runbook and the `env::empty` root cause.
+2. Open a new issue on **mamba-org/mamba** titled roughly "libmamba codesign() spuriously fails with 'Invalid argument' on macOS 26 due to `reproc::env::empty`" — reference Section 15f here and the minimal repro from Section 15d.
+3. Optionally open a PR changing `reproc::env::empty` → `reproc::env::extend` (or passing `{ "PATH=/usr/bin" }` as a minimal envp) in `libmamba/src/core/util_os.cpp::codesign()`. Also fix the argv regression on main while we're there (restore the `"-"` identity argument).
 
 ### 15i. Cleanup performed by Section 15
 
