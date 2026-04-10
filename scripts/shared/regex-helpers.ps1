@@ -8,7 +8,7 @@
 #   . (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')   # from scripts/mac/
 #   . (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')   # from scripts/windows/
 
-function REGEX_ParseBrewfileLine {
+function STRINGOP_ParseBrewfileLine {
     <#
     .SYNOPSIS
         Parse a single Brewfile line into its type and package name.
@@ -23,23 +23,25 @@ function REGEX_ParseBrewfileLine {
         Hashtable with Type ('brew' or 'cask') and Name (package name), or $null
         if the line is not a brew/cask entry.
     .EXAMPLE
-        REGEX_ParseBrewfileLine 'brew "git"'
+        STRINGOP_ParseBrewfileLine 'brew "git"'
         # Returns @{ Type = 'brew'; Name = 'git' }
     .EXAMPLE
-        REGEX_ParseBrewfileLine '# comment'
+        STRINGOP_ParseBrewfileLine '# comment'
         # Returns $null
     #>
     param([string]$Line)
 
-    # Pattern: line starts with 'brew' or 'cask', followed by whitespace,
-    # then a double-quoted package name.
-    #   ^(brew|cask)   -- capture group 1: the type
-    #   \s+            -- one or more whitespace characters
-    #   "([^"]+)"      -- capture group 2: the package name (inside quotes)
-    if ($Line -match '^(brew|cask)\s+"([^"]+)"') {
-        return @{ Type = $Matches[1]; Name = $Matches[2] }
-    }
-    return $null
+    $type = $null
+    if ($Line.StartsWith('brew '))  { $type = 'brew' }
+    if ($Line.StartsWith('cask '))  { $type = 'cask' }
+    if (-not $type) { return $null }
+
+    $firstQuote = $Line.IndexOf('"')
+    $lastQuote  = $Line.LastIndexOf('"')
+    if ($firstQuote -lt 0 -or $lastQuote -le $firstQuote) { return $null }
+
+    $name = $Line.Substring($firstQuote + 1, $lastQuote - $firstQuote - 1)
+    return @{ Type = $type; Name = $name }
 }
 
 function STRINGOP_TestMiseActivated {

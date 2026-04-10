@@ -48,7 +48,7 @@ function Get-BrewfileEntries {
     foreach ($line in (Get-Content $Path)) {
         $line = $line.Trim()
         if ([string]::IsNullOrEmpty($line) -or $line.StartsWith('#')) { continue }
-        $parsed = REGEX_ParseBrewfileLine -Line $line
+        $parsed = STRINGOP_ParseBrewfileLine -Line $line
         if ($parsed) {
             $entries += $parsed
         }
