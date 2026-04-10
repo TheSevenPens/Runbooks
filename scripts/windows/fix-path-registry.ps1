@@ -13,6 +13,8 @@
 # Output: Structured lines prefixed with OK / WARN / INFO / SKIP
 # Exit code: 0 on success, 1 on failure
 
+. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+
 $ErrorActionPreference = 'Stop'
 $Changed = $false
 
@@ -40,7 +42,7 @@ if ($currentType -ne 'ExpandString') {
 
 # --- Step 2: Remove stale miniconda3 entries ---
 
-$parts = $currentValue -split ';' | Where-Object { $_ -ne '' }
+$parts = STRINGOP_SplitAndCleanPath -PathString $currentValue
 $cleanParts = @()
 $removedCount = 0
 
@@ -59,39 +61,13 @@ if ($removedCount -eq 0) {
 }
 
 # --- Step 2b: Repair entries with missing semicolons ---
-# External installers (e.g. micromamba) may concatenate PATH entries without a
-# separator, producing entries like "...WindowsAppsC:\Users\...".  Detect drive
-# letters (X:\) that appear mid-entry and split them apart.
-
-$repairedParts = @()
-foreach ($entry in $cleanParts) {
-    # Find positions where a drive-letter pattern (X:\) starts after position 0
-    $splitPositions = @()
-    for ($i = 1; $i -lt $entry.Length - 2; $i++) {
-        $c = $entry[$i]
-        if ((($c -ge 'A') -and ($c -le 'Z')) -or (($c -ge 'a') -and ($c -le 'z'))) {
-            if (($entry[$i + 1] -eq ':') -and ($entry[$i + 2] -eq '\')) {
-                $splitPositions += $i
-            }
-        }
-    }
-
-    if ($splitPositions.Count -eq 0) {
-        $repairedParts += $entry
-    } else {
-        Write-Host "WARN: Repaired missing semicolon in: $entry"
-        $prev = 0
-        foreach ($pos in $splitPositions) {
-            $part = $entry.Substring($prev, $pos - $prev)
-            $repairedParts += $part
-            Write-Host "  -> $part"
-            $prev = $pos
-        }
-        $last = $entry.Substring($prev)
-        $repairedParts += $last
-        Write-Host "  -> $last"
-        $Changed = $true
-    }
+$beforeCount = $cleanParts.Count
+$repairedParts = @(STRINGOP_RepairPathEntries -Entries $cleanParts)
+if ($repairedParts.Count -gt $beforeCount) {
+    Write-Host "WARN: Repaired $($repairedParts.Count - $beforeCount) concatenated PATH entry(s)"
+    $Changed = $true
+} else {
+    Write-Host "SKIP: No concatenated entries found"
 }
 $cleanParts = $repairedParts
 

@@ -11,6 +11,8 @@
     Invoke: pwsh -NoProfile -File scripts/mac/install-apps.ps1
 #>
 
+. (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -102,16 +104,7 @@ function Resolve-Executable {
     return ''
 }
 
-function Get-ToolVersion {
-    param([string]$ExePath, [string]$Flag)
-    if ([string]::IsNullOrEmpty($ExePath) -or [string]::IsNullOrEmpty($Flag)) { return '' }
-    try {
-        $output = & $ExePath $Flag 2>&1
-        return ($output | Select-Object -First 1)
-    } catch {
-        return ''
-    }
-}
+# STRINGOP_GetToolVersion is now STRINGOP_GetToolVersion in shared/regex-helpers.ps1
 
 # --- Main loop ---
 
@@ -133,10 +126,10 @@ foreach ($app in $Apps) {
             if ($type -eq 'formula' -and
                 -not [string]::IsNullOrEmpty($app.CanonicalPath) -and
                 $exePath -ne $app.CanonicalPath) {
-                $version = Get-ToolVersion -ExePath $exePath -Flag $app.VerifyFlag
+                $version = STRINGOP_GetToolVersion -ExePath $exePath -Flag $app.VerifyFlag
                 Write-Host "INFO: $name found at $exePath -- $version (not brew version, will install)" -ForegroundColor Yellow
             } else {
-                $version = Get-ToolVersion -ExePath $exePath -Flag $app.VerifyFlag
+                $version = STRINGOP_GetToolVersion -ExePath $exePath -Flag $app.VerifyFlag
                 Write-Host "SKIP: $name already installed -- $version" -ForegroundColor Green
                 $alreadyInstalled = $true
             }
@@ -177,7 +170,7 @@ foreach ($app in $Apps) {
     if (-not [string]::IsNullOrEmpty($app.Verify)) {
         $exePath = Resolve-Executable -Command $app.Verify -CanonicalPath $app.CanonicalPath
         if (-not [string]::IsNullOrEmpty($exePath)) {
-            $version = Get-ToolVersion -ExePath $exePath -Flag $app.VerifyFlag
+            $version = STRINGOP_GetToolVersion -ExePath $exePath -Flag $app.VerifyFlag
             Write-Host "OK: $name verified -- $version" -ForegroundColor Green
         } else {
             Write-Host "WARN: $name installed but '$($app.Verify)' not found on PATH -- open a new terminal" -ForegroundColor Yellow

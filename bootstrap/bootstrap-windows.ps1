@@ -38,16 +38,12 @@ function STRINGOP_TestLooksLikePowerShellScript {
     return (STRINGOP_TestContainsAnyWord -Text $Content -Words @('param', 'function', 'Install', 'claude'))
 }
 
-function Repair-PathEntries {
-    <#
-    .SYNOPSIS
-        Split PATH entries that were concatenated without a semicolon.
-    .DESCRIPTION
-        External installers (e.g. micromamba) may join PATH entries without a
-        separator, producing values like "...WindowsAppsC:\Users\...".  This
-        scans each entry for drive-letter patterns (X:\) appearing mid-string
-        and splits them into separate entries.
-    #>
+function STRINGOP_SplitAndCleanPath {
+    param([string]$PathString, [string]$Delimiter = ';')
+    return @($PathString -split [regex]::Escape($Delimiter) |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+}
+function STRINGOP_RepairPathEntries {
     param([string[]]$Entries)
     $repaired = @()
     foreach ($entry in $Entries) {
@@ -60,9 +56,8 @@ function Repair-PathEntries {
                 }
             }
         }
-        if ($splitPositions.Count -eq 0) {
-            $repaired += $entry
-        } else {
+        if ($splitPositions.Count -eq 0) { $repaired += $entry }
+        else {
             $prev = 0
             foreach ($pos in $splitPositions) {
                 $repaired += $entry.Substring($prev, $pos - $prev)
@@ -75,19 +70,11 @@ function Repair-PathEntries {
 }
 
 function Refresh-SessionPath {
-    <#
-    .SYNOPSIS
-        Reload the user and machine PATH into the current session.
-    .DESCRIPTION
-        After a winget install, the new tool is on the registry PATH but not
-        in the running shell. This reads both sources and rebuilds $env:Path
-        so subsequent commands find the new tool without restarting.
-        Also repairs entries that were concatenated without semicolons.
-    #>
-    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $userPath    = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $raw = "$machinePath;$userPath" -split ';' | Where-Object { $_ -ne '' }
-    $env:Path = (Repair-PathEntries $raw) -join ';'
+    <# Reload user + machine PATH into the current session, with repair. #>
+    $combined = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('Path', 'User')
+    $raw = STRINGOP_SplitAndCleanPath -PathString $combined
+    $env:Path = (STRINGOP_RepairPathEntries -Entries $raw) -join ';'
 }
 
 # ---------------------------------------------------------------------------
@@ -171,8 +158,8 @@ if (Test-Path $ClaudeExe) {
 if (Test-Path $ClaudeExe) {
     $currentUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $currentUserPath) { $currentUserPath = '' }
-    $pathEntries = $currentUserPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-    $pathEntries = @(Repair-PathEntries $pathEntries)
+    $pathEntries = STRINGOP_SplitAndCleanPath -PathString $currentUserPath
+    $pathEntries = @(STRINGOP_RepairPathEntries -Entries $pathEntries)
 
     if ($pathEntries | Where-Object { $_ -ieq $ClaudeBin }) {
         Write-Host "$ClaudeBin is already on the user PATH." -ForegroundColor Green
@@ -206,14 +193,14 @@ public static extern IntPtr SendMessageTimeout(
     }
 
     # Also fix the current session
-    if (-not ($env:Path -split ';' | Where-Object { $_ -ieq $ClaudeBin })) {
+    if (-not ((STRINGOP_SplitAndCleanPath -PathString $env:Path) | Where-Object { $_ -ieq $ClaudeBin })) {
         $env:Path = "$ClaudeBin;$env:Path"
     }
 
     # Verify: re-read the registry PATH and confirm the Claude bin dir is there
     $verifyPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $verifyPath) { $verifyPath = '' }
-    $verifyEntries = $verifyPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+    $verifyEntries = STRINGOP_SplitAndCleanPath -PathString $verifyPath
     if (-not ($verifyEntries | Where-Object { $_ -ieq $ClaudeBin })) {
         Write-Warning "$ClaudeBin is NOT on the user PATH registry after update. claude may not be found in new terminals."
         $FailCount++

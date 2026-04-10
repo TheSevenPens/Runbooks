@@ -17,6 +17,8 @@
 # Output: Structured lines prefixed with OK / SKIP / FAIL / INFO
 # Exit code: 0 on success, 1 on any failure
 
+. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -77,14 +79,8 @@ foreach ($app in $Apps) {
             }
         }
         if ($exe) {
-            $verifyCmd = $exe.Source
-            $version = ""
-            try {
-                $output = & $verifyCmd $app.VerifyFlag 2>&1 | Select-Object -First 1
-                $version = "$output".Trim()
-            } catch {
-                $version = "(version check failed: $_)"
-            }
+            $version = STRINGOP_GetToolVersion -ExePath $exe.Source -Flag $app.VerifyFlag
+            if (-not $version) { $version = '(version unknown)' }
             Write-Host "SKIP: $name already installed - $version"
             $alreadyInstalled = $true
         }
@@ -115,33 +111,10 @@ foreach ($app in $Apps) {
     # Verify (CLI tools only)
     if ($app.Verify) {
         # Refresh PATH in this session so newly installed commands are found.
-        # Repair entries concatenated without semicolons (micromamba installer bug).
-        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-        $userPath    = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $rawParts    = "$machinePath;$userPath" -split ';' | Where-Object { $_ -ne '' }
-        $fixedParts  = @()
-        foreach ($entry in $rawParts) {
-            $splits = @()
-            for ($ci = 1; $ci -lt $entry.Length - 2; $ci++) {
-                $ch = $entry[$ci]
-                if ((($ch -ge 'A') -and ($ch -le 'Z')) -or (($ch -ge 'a') -and ($ch -le 'z'))) {
-                    if (($entry[$ci + 1] -eq ':') -and ($entry[$ci + 2] -eq '\')) {
-                        $splits += $ci
-                    }
-                }
-            }
-            if ($splits.Count -eq 0) {
-                $fixedParts += $entry
-            } else {
-                $prev = 0
-                foreach ($pos in $splits) {
-                    $fixedParts += $entry.Substring($prev, $pos - $prev)
-                    $prev = $pos
-                }
-                $fixedParts += $entry.Substring($prev)
-            }
-        }
-        $env:Path = $fixedParts -join ';'
+        $combined = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                    [Environment]::GetEnvironmentVariable('Path', 'User')
+        $raw = STRINGOP_SplitAndCleanPath -PathString $combined
+        $env:Path = (STRINGOP_RepairPathEntries -Entries $raw) -join ';'
 
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
         if (-not $exe -and $app.VerifyPaths) {

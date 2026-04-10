@@ -114,32 +114,10 @@ Write-Host ""
 Write-Host "--- Verifying packages ---"
 
 # Refresh PATH, repairing entries concatenated without semicolons
-$machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-$userPath    = [Environment]::GetEnvironmentVariable('Path', 'User')
-$rawParts    = "$machinePath;$userPath" -split ';' | Where-Object { $_ -ne '' }
-$fixedParts  = @()
-foreach ($entry in $rawParts) {
-    $splits = @()
-    for ($ci = 1; $ci -lt $entry.Length - 2; $ci++) {
-        $ch = $entry[$ci]
-        if ((($ch -ge 'A') -and ($ch -le 'Z')) -or (($ch -ge 'a') -and ($ch -le 'z'))) {
-            if (($entry[$ci + 1] -eq ':') -and ($entry[$ci + 2] -eq '\')) {
-                $splits += $ci
-            }
-        }
-    }
-    if ($splits.Count -eq 0) {
-        $fixedParts += $entry
-    } else {
-        $prev = 0
-        foreach ($pos in $splits) {
-            $fixedParts += $entry.Substring($prev, $pos - $prev)
-            $prev = $pos
-        }
-        $fixedParts += $entry.Substring($prev)
-    }
-}
-$env:Path = $fixedParts -join ';'
+$combined = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+            [Environment]::GetEnvironmentVariable('Path', 'User')
+$raw = STRINGOP_SplitAndCleanPath -PathString $combined
+$env:Path = (STRINGOP_RepairPathEntries -Entries $raw) -join ';'
 
 foreach ($pkg in $packages) {
     $id = $pkg.PackageIdentifier

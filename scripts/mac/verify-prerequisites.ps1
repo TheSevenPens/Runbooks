@@ -43,7 +43,8 @@ function Test-CliTool {
     )
     $exe = Get-Command $Command -ErrorAction SilentlyContinue
     if ($exe) {
-        $version = try { & $exe.Source $VersionFlag 2>&1 | Select-Object -First 1 } catch { 'unknown' }
+        $version = STRINGOP_GetToolVersion -ExePath $exe.Source -Flag $VersionFlag
+        if (-not $version) { $version = 'unknown' }
         Write-Host "OK: $Name -- $version ($($exe.Source))" -ForegroundColor Green
         return $true
     } else {
@@ -125,7 +126,8 @@ $miseTools = @(
 foreach ($tool in $miseTools) {
     $exe = Get-Command $tool.Command -ErrorAction SilentlyContinue
     if ($exe) {
-        $version = try { & $exe.Source --version 2>&1 | Select-Object -First 1 } catch { 'unknown' }
+        $version = STRINGOP_GetToolVersion -ExePath $exe.Source -Flag '--version'
+        if (-not $version) { $version = 'unknown' }
         $source = if ($exe.Source.Contains('mise')) { 'mise' } else { 'other' }
         if ($source -eq 'mise') {
             Write-Host "OK: $($tool.Name) -- $version ($($exe.Source))" -ForegroundColor Green

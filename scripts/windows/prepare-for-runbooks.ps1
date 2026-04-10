@@ -28,34 +28,6 @@ if ($effectivePolicy -eq 'Restricted') {
 $ClaudeBin = Join-Path $env:USERPROFILE '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 
-function Repair-PathEntries {
-    <# Split PATH entries concatenated without a semicolon (e.g. ...AppsC:\Users\...) #>
-    param([string[]]$Entries)
-    $repaired = @()
-    foreach ($entry in $Entries) {
-        $splitPositions = @()
-        for ($i = 1; $i -lt $entry.Length - 2; $i++) {
-            $c = $entry[$i]
-            if ((($c -ge 'A') -and ($c -le 'Z')) -or (($c -ge 'a') -and ($c -le 'z'))) {
-                if (($entry[$i + 1] -eq ':') -and ($entry[$i + 2] -eq '\')) {
-                    $splitPositions += $i
-                }
-            }
-        }
-        if ($splitPositions.Count -eq 0) {
-            $repaired += $entry
-        } else {
-            $prev = 0
-            foreach ($pos in $splitPositions) {
-                $repaired += $entry.Substring($prev, $pos - $prev)
-                $prev = $pos
-            }
-            $repaired += $entry.Substring($prev)
-        }
-    }
-    return $repaired
-}
-
 # --- Install Claude Code ---
 if (Test-Path $ClaudeExe) {
     Write-Host "Claude Code already installed at $ClaudeExe" -ForegroundColor Green
@@ -91,9 +63,9 @@ if (-not $currentUserPath) {
     $currentUserPath = ''
 }
 
-# Split, trim, and filter empties for reliable comparison
-$pathEntries = $currentUserPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-$pathEntries = @(Repair-PathEntries $pathEntries)
+# Split, trim, filter empties, and repair concatenated entries
+$pathEntries = STRINGOP_SplitAndCleanPath -PathString $currentUserPath
+$pathEntries = @(STRINGOP_RepairPathEntries -Entries $pathEntries)
 
 $alreadyOnPath = $pathEntries | Where-Object { $_ -ieq $ClaudeBin }
 
