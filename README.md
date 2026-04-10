@@ -11,7 +11,7 @@ On a fresh machine, run the bootstrap script to install Claude Code, Git, and cl
 Open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/TheSevenPens/Runbooks/master/bootstrap/bootstrap-windows.ps1 | iex
+irm https://gist.githubusercontent.com/TheSevenPens/a34bb99fceb9637c863a9af02c16a0d3/raw/bootstrap-windows.ps1 | iex
 ```
 
 This installs Git and Claude Code, then clones the repo to `~/Documents/GitHub/Runbooks`.
