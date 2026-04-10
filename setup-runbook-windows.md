@@ -163,6 +163,7 @@ oh-my-posh font install JetBrainsMono
 | `install-apps.ps1` PATH refresh drops winget mid-run | After installing an app with a CLI verifier, the script refreshes `$env:Path` from the registry (lines 102-104). This overwrites the session PATH and drops the AppX winget alias. The first few apps install fine, then the rest fail. Fixed by resolving winget to its full path once at startup and using `$WingetExe` everywhere. |
 | OneDrive Documents redirection breaks PowerShell profile lookups | When OneDrive redirects `Documents` to `~\OneDrive\Documents`, scripts that hardcode `$env:USERPROFILE\Documents\...` for PS profile paths look in the wrong place. Affected: `micromamba-shell-init.ps1`, `verify-prerequisites.ps1`, `remove-conda.ps1`. Fixed: all now use `[Environment]::GetFolderPath('MyDocuments')`. `verify-prerequisites.ps1` also prints a WARN when redirection is detected. |
 | PATH registry type `REG_SZ` on fresh Windows machines | The micromamba installer (or Windows itself) may set `HKCU\Environment\Path` to `REG_SZ` instead of `REG_EXPAND_SZ`. CMD silently ignores user PATH entries when the type is wrong. Fixed by `fix-path-registry.ps1` (run during Section 8). |
+| Missing semicolons in PATH after micromamba install | The micromamba installer may concatenate PATH entries without a semicolon separator (e.g. `...WindowsAppsC:\Users\...`). This silently merges two entries into one invalid path. Fixed: `fix-path-registry.ps1` now detects drive-letter patterns mid-entry and splits them apart (step 2b). |
 | PowerShell 7 installs as MSIX on ARM, `pwsh` not at standard path | `winget install Microsoft.PowerShell` on ARM64 installs the MSIX package, placing `pwsh.exe` at `AppData\Local\Microsoft\WindowsApps\` instead of `Program Files\PowerShell\7\`. Fixed: `install-apps.ps1` now includes the WindowsApps path in `VerifyPaths`. |
 | Em-dash characters in PS scripts cause parse errors | PowerShell 5.1 cannot parse UTF-8 files containing non-ASCII characters (like `---`) unless the file has a BOM. Scripts must use only ASCII characters. See `CLAUDE.md` "File encoding rules" for the full policy. |
 | PS5.1 `-Encoding UTF8` adds BOM, breaking bash files | PowerShell 5.1's `Set-Content -Encoding UTF8` and `Add-Content -Encoding UTF8` always add a UTF-8 BOM (`EF BB BF`). Bash interprets these bytes as part of the first command, producing `$'\357\273\277eval': command not found`. PS7 does **not** add a BOM. Since scripts may run under either version, never use `-Encoding UTF8` when writing files that bash reads. Use `[System.IO.File]::WriteAllText()` instead. `verify-prerequisites.ps1` now checks `.bash_profile` and `.bashrc` for accidental BOMs. |
@@ -224,6 +225,16 @@ This section documents issues found during the first run of the runbook on a Win
 **Root cause:** The Edit tool wrote UTF-8 em-dash characters (`---`, 3 bytes: `E2 80 94`) into `.ps1` files. PowerShell 5.1's parser cannot handle multi-byte UTF-8 without a BOM --- it misinterprets byte boundaries and produces cascading parse errors on lines *after* the offending character. The error messages point to valid regex patterns like `[^"]+` which are perfectly fine --- PS5.1 is just confused about byte alignment.
 
 **Lesson:** All `.ps1` files in this repo must use ASCII-only characters. Use `-` (hyphen) instead of `---` (em-dash).
+
+### 7. Micromamba installer concatenates PATH entries without semicolons
+
+**Symptom:** After installing micromamba and running `fix-path-registry.ps1`, the user PATH registry contained `...Microsoft\WindowsAppsC:\Users\seven\.local\bin...` (missing semicolon between two entries).
+
+**Root cause:** The micromamba installer (`micro.mamba.pm/install.ps1`) modifies the user PATH to add its directory. When it reads the existing PATH and appends/prepends its entry, it may drop the semicolon between adjacent existing entries. On this machine the pre-existing PATH contained `C:\Users\seven\AppData\Local\Microsoft\WindowsApps;C:\Users\seven\.local\bin` and the installer produced `...WindowsAppsC:\Users\seven\.local\bin...` after modifying the value.
+
+**Impact:** The two entries merge into one invalid path. Any tool in `.local\bin` becomes unreachable. `fix-path-registry.ps1` previously split only on `;` and treated the concatenated string as a single valid entry, writing it back unchanged.
+
+**Fix:** `fix-path-registry.ps1` step 2b now scans each entry for drive-letter patterns (`X:\`) that appear mid-entry and splits them into separate entries.
 
 ---
 

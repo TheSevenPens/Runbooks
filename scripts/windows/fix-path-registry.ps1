@@ -6,6 +6,8 @@
 # Actions:
 #   1. Fix HKCU\Environment\Path type from REG_SZ to REG_EXPAND_SZ if needed
 #   2. Remove stale miniconda3 entries
+#   2b. Repair entries with missing semicolons (e.g. external installers that
+#       concatenate PATH entries without a separator)
 #   3. Ensure micromamba's AppData\Local\micromamba directory is on PATH
 #
 # Output: Structured lines prefixed with OK / WARN / INFO / SKIP
@@ -55,6 +57,43 @@ foreach ($entry in $parts) {
 if ($removedCount -eq 0) {
     Write-Host "SKIP: No miniconda3 entries found in PATH"
 }
+
+# --- Step 2b: Repair entries with missing semicolons ---
+# External installers (e.g. micromamba) may concatenate PATH entries without a
+# separator, producing entries like "...WindowsAppsC:\Users\...".  Detect drive
+# letters (X:\) that appear mid-entry and split them apart.
+
+$repairedParts = @()
+foreach ($entry in $cleanParts) {
+    # Find positions where a drive-letter pattern (X:\) starts after position 0
+    $splitPositions = @()
+    for ($i = 1; $i -lt $entry.Length - 2; $i++) {
+        $c = $entry[$i]
+        if ((($c -ge 'A') -and ($c -le 'Z')) -or (($c -ge 'a') -and ($c -le 'z'))) {
+            if (($entry[$i + 1] -eq ':') -and ($entry[$i + 2] -eq '\')) {
+                $splitPositions += $i
+            }
+        }
+    }
+
+    if ($splitPositions.Count -eq 0) {
+        $repairedParts += $entry
+    } else {
+        Write-Host "WARN: Repaired missing semicolon in: $entry"
+        $prev = 0
+        foreach ($pos in $splitPositions) {
+            $part = $entry.Substring($prev, $pos - $prev)
+            $repairedParts += $part
+            Write-Host "  -> $part"
+            $prev = $pos
+        }
+        $last = $entry.Substring($prev)
+        $repairedParts += $last
+        Write-Host "  -> $last"
+        $Changed = $true
+    }
+}
+$cleanParts = $repairedParts
 
 # --- Step 3: Ensure micromamba directory is on PATH ---
 

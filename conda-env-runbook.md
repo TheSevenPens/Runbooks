@@ -145,6 +145,7 @@ Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -U
 **fix-path-registry.ps1:**
 - Checks that `HKCU\Environment\Path` is `REG_EXPAND_SZ` (not `REG_SZ`), fixes if wrong
 - Removes stale miniconda3 entries from PATH
+- Repairs entries with missing semicolons (e.g. external installers that concatenate entries)
 - Ensures micromamba's `AppData\Local\micromamba` directory is on PATH
 
 **micromamba-shell-init.ps1:**
@@ -358,6 +359,7 @@ Present results to the user in this format:
 | Issue | Fix |
 |---|---|
 | User PATH entries ignored by CMD | Check that `HKCU\Environment\Path` registry value type is `REG_EXPAND_SZ`, not `REG_SZ` (see Section 1b) |
+| Missing semicolons in PATH after micromamba install | The micromamba installer may concatenate PATH entries without a semicolon separator. `fix-path-registry.ps1` step 2b detects and repairs these. |
 | `micromamba shell init -s cmd.exe` produces mangled path | Run it from PowerShell, not Git Bash. Verify the AutoRun registry value afterward (see Section 1c) |
 | Execution policy blocks micromamba install | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | CMD AutoRun conflict when both conda and micromamba are installed | Both `conda_hook.bat` and `mamba_hook.bat` use `IF DEFINED CONDA_SHLVL GOTO :EOF` — whichever runs second silently exits. This is why the runbook removes conda first (Section 0) |
