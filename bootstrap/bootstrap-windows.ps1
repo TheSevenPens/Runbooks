@@ -8,7 +8,7 @@
 
       irm https://raw.githubusercontent.com/TheSevenPens/Runbooks/master/bootstrap/bootstrap-windows.ps1 | iex
 
-    Each step is idempotent — already-installed tools are skipped.
+    Each step is idempotent -already-installed tools are skipped.
     Requires winget (ships with Windows 11).
 
     Claude Code is installed via the official installer (https://claude.ai/install.ps1),
@@ -24,6 +24,42 @@ $ClaudeBin = Join-Path $HOME '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 $FailCount = 0
 
+function Repair-PathEntries {
+    <#
+    .SYNOPSIS
+        Split PATH entries that were concatenated without a semicolon.
+    .DESCRIPTION
+        External installers (e.g. micromamba) may join PATH entries without a
+        separator, producing values like "...WindowsAppsC:\Users\...".  This
+        scans each entry for drive-letter patterns (X:\) appearing mid-string
+        and splits them into separate entries.
+    #>
+    param([string[]]$Entries)
+    $repaired = @()
+    foreach ($entry in $Entries) {
+        $splitPositions = @()
+        for ($i = 1; $i -lt $entry.Length - 2; $i++) {
+            $c = $entry[$i]
+            if ((($c -ge 'A') -and ($c -le 'Z')) -or (($c -ge 'a') -and ($c -le 'z'))) {
+                if (($entry[$i + 1] -eq ':') -and ($entry[$i + 2] -eq '\')) {
+                    $splitPositions += $i
+                }
+            }
+        }
+        if ($splitPositions.Count -eq 0) {
+            $repaired += $entry
+        } else {
+            $prev = 0
+            foreach ($pos in $splitPositions) {
+                $repaired += $entry.Substring($prev, $pos - $prev)
+                $prev = $pos
+            }
+            $repaired += $entry.Substring($prev)
+        }
+    }
+    return $repaired
+}
+
 function Refresh-SessionPath {
     <#
     .SYNOPSIS
@@ -32,14 +68,16 @@ function Refresh-SessionPath {
         After a winget install, the new tool is on the registry PATH but not
         in the running shell. This reads both sources and rebuilds $env:Path
         so subsequent commands find the new tool without restarting.
+        Also repairs entries that were concatenated without semicolons.
     #>
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $userPath    = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $env:Path    = "$machinePath;$userPath"
+    $raw = "$machinePath;$userPath" -split ';' | Where-Object { $_ -ne '' }
+    $env:Path = (Repair-PathEntries $raw) -join ';'
 }
 
 # ---------------------------------------------------------------------------
-# Step 1 — Git
+# Step 1 -Git
 # ---------------------------------------------------------------------------
 Write-Host "`n--- Step 1: Git ---" -ForegroundColor Cyan
 
@@ -79,7 +117,7 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 2 — Claude Code (official installer)
+# Step 2 -Claude Code (official installer)
 # ---------------------------------------------------------------------------
 Write-Host "`n--- Step 2: Claude Code ---" -ForegroundColor Cyan
 
@@ -120,6 +158,7 @@ if (Test-Path $ClaudeExe) {
     $currentUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     if (-not $currentUserPath) { $currentUserPath = '' }
     $pathEntries = $currentUserPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+    $pathEntries = @(Repair-PathEntries $pathEntries)
 
     if ($pathEntries | Where-Object { $_ -ieq $ClaudeBin }) {
         Write-Host "$ClaudeBin is already on the user PATH." -ForegroundColor Green
@@ -159,7 +198,7 @@ public static extern IntPtr SendMessageTimeout(
 }
 
 # ---------------------------------------------------------------------------
-# Step 3 — Clone the repo
+# Step 3 -Clone the repo
 # ---------------------------------------------------------------------------
 Write-Host "`n--- Step 3: Clone Runbooks repo ---" -ForegroundColor Cyan
 

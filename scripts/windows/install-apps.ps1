@@ -114,10 +114,34 @@ foreach ($app in $Apps) {
 
     # Verify (CLI tools only)
     if ($app.Verify) {
-        # Refresh PATH in this session so newly installed commands are found
+        # Refresh PATH in this session so newly installed commands are found.
+        # Repair entries concatenated without semicolons (micromamba installer bug).
         $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
         $userPath    = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $env:Path    = "$machinePath;$userPath"
+        $rawParts    = "$machinePath;$userPath" -split ';' | Where-Object { $_ -ne '' }
+        $fixedParts  = @()
+        foreach ($entry in $rawParts) {
+            $splits = @()
+            for ($ci = 1; $ci -lt $entry.Length - 2; $ci++) {
+                $ch = $entry[$ci]
+                if ((($ch -ge 'A') -and ($ch -le 'Z')) -or (($ch -ge 'a') -and ($ch -le 'z'))) {
+                    if (($entry[$ci + 1] -eq ':') -and ($entry[$ci + 2] -eq '\')) {
+                        $splits += $ci
+                    }
+                }
+            }
+            if ($splits.Count -eq 0) {
+                $fixedParts += $entry
+            } else {
+                $prev = 0
+                foreach ($pos in $splits) {
+                    $fixedParts += $entry.Substring($prev, $pos - $prev)
+                    $prev = $pos
+                }
+                $fixedParts += $entry.Substring($prev)
+            }
+        }
+        $env:Path = $fixedParts -join ';'
 
         $exe = Get-Command $app.Verify -ErrorAction SilentlyContinue
         if (-not $exe -and $app.VerifyPaths) {
