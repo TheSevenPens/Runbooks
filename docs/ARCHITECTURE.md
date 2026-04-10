@@ -11,7 +11,8 @@ A user opens Claude Code and tells it which runbook to follow. Claude Code reads
 ```
 setup-runbook-windows.md       — Windows machine setup
 setup-runbook-mac.md           — macOS machine setup
-conda-env-runbook.md           — Micromamba setup (shared, with platform callouts)
+conda-env-runbook.md           — Conda/micromamba env setup (legacy, per-platform)
+mise-env-runbook.md            — Tool version management via mise (cross-platform)
 scripts/windows/*.ps1          — PowerShell automation scripts
 scripts/mac/*.sh               — Bash automation scripts
 docs/                          — Architecture and change history
@@ -25,23 +26,21 @@ docs/FUTURES.md                — Roadmap and planned improvements
 1. `prepare-for-runbooks.ps1` — execution policy, Claude Code install, PATH
 2. `install-apps.ps1` — Git, GitHub Desktop, VS Code, Chrome, Terminal, PowerShell 7
 3. Oh My Posh (optional, prompted)
-4. `remove-conda.ps1` (if conda present)
-5. Micromamba install (manual invoke of official installer)
-6. `fix-path-registry.ps1` — fix registry type, clean stale entries
-7. `micromamba-shell-init.ps1` — hooks for PowerShell 5.1/7 and CMD
-8. `micromamba create -n node1` — create environment
-9. `verify-shell-integration.ps1` — confirm all shells work
-10. Post-setup manual sign-ins (GitHub Desktop, Chrome)
+4. Tool setup (pick one):
+   - **mise path** (`mise-env-runbook.md`): `winget install jdx.mise`, activate in PS7/PS5.1, add shims to PATH for CMD, `mise use -g`
+   - **conda path** (`conda-env-runbook.md`): `remove-conda.ps1`, micromamba install, `fix-path-registry.ps1`, `micromamba-shell-init.ps1`, `create-env.ps1`
+5. Verify with `mise doctor` (mise path) or `verify-shell-integration.ps1` (conda path)
+6. Post-setup manual sign-ins (GitHub Desktop, Chrome)
 
 **macOS:**
 1. Homebrew install
 2. `install-apps.sh` — Git, GitHub Desktop, VS Code, Chrome via brew (idempotent)
 3. iTerm2, shell customization (optional)
-4. Micromamba via `brew install micromamba`
-5. `micromamba shell init` for zsh and bash
-6. Environment creation
-7. `verify-shell-integration.sh` — confirm zsh and bash work
-8. Post-setup manual sign-ins (GitHub Desktop, Chrome)
+4. Tool setup (pick one):
+   - **mise path** (`mise-env-runbook.md`): `brew install mise`, activate in zsh/bash, `mise use -g`
+   - **conda path** (`conda-env-runbook.md`): miniconda via brew, `conda init`, `create-env.sh`
+5. Verify with `mise doctor` (mise path) or `verify-shell-integration.sh` (conda path)
+6. Post-setup manual sign-ins (GitHub Desktop, Chrome)
 
 ### Callout markers
 
