@@ -15,6 +15,8 @@ param(
     [string]$Brewfile = ''
 )
 
+. (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -46,8 +48,9 @@ function Get-BrewfileEntries {
     foreach ($line in (Get-Content $Path)) {
         $line = $line.Trim()
         if ([string]::IsNullOrEmpty($line) -or $line.StartsWith('#')) { continue }
-        if ($line -match '^(brew|cask)\s+"([^"]+)"') {
-            $entries += @{ Type = $Matches[1]; Name = $Matches[2] }
+        $parsed = REGEX_ParseBrewfileLine -Line $line
+        if ($parsed) {
+            $entries += $parsed
         }
     }
     return $entries

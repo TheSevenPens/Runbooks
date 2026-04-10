@@ -10,6 +10,8 @@
 # Output: Structured OK/FAIL lines, then a summary table
 # Exit code: 0 if all pass, 1 if any fail
 
+. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 $Results = @()
@@ -59,8 +61,8 @@ function Test-ShellActivate {
             Write-Host "OK: $ShellName micromamba-activate"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "OK" }
         } else {
-            $errLine = ($stderr -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1)
-            if (-not $errLine) { $errLine = ($stdout -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1) }
+            $errLine = REGEX_FindFirstNonBlankLine -Text $stderr
+            if (-not $errLine) { $errLine = REGEX_FindFirstNonBlankLine -Text $stdout }
             Write-Host "FAIL: $ShellName micromamba-activate - $errLine"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "FAIL" }
             $script:FailCount++
@@ -142,8 +144,8 @@ if ($autoRun -and $autoRun.Contains('mamba_hook.bat')) {
             Write-Host "OK: CMD micromamba-activate"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "OK" }
         } else {
-            $errLine = ($stderr -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1)
-            if (-not $errLine) { $errLine = ($stdout -split "`n" | Where-Object { $_ -match '\S' } | Select-Object -First 1) }
+            $errLine = REGEX_FindFirstNonBlankLine -Text $stderr
+            if (-not $errLine) { $errLine = REGEX_FindFirstNonBlankLine -Text $stdout }
             Write-Host "FAIL: CMD micromamba-activate - $errLine"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
             $FailCount++

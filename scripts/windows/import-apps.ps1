@@ -20,6 +20,8 @@ param(
     [string]$InFile = ""
 )
 
+. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -91,7 +93,7 @@ $importExitCode = $LASTEXITCODE
 # Report what happened during import
 $outputStr = ($output | Out-String)
 $successLines = @($output | Where-Object { "$_".Contains('Successfully installed') })
-$failLines = @($output | Where-Object { $_ -match 'failed|error' -and -not "$_".Contains('ignore') })
+$failLines = @($output | Where-Object { (REGEX_TestContainsAnyWord -Text "$_" -Words @('failed', 'error')) -and -not "$_".Contains('ignore') })
 
 if ($successLines.Count -gt 0) {
     Write-Host "INFO: winget import installed $($successLines.Count) package(s)"

@@ -12,6 +12,8 @@
     Invoke: pwsh -NoProfile -File scripts/mac/verify-prerequisites.ps1
 #>
 
+. (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -99,7 +101,7 @@ if ($miseExe) {
 
     # Check mise activation
     $miseDoctor = & mise doctor 2>&1
-    $activated = ($miseDoctor | Select-String 'activated:\s*yes')
+    $activated = REGEX_TestMiseActivated -DoctorOutput $miseDoctor
     if ($activated) {
         Write-Host "OK: mise is activated" -ForegroundColor Green
     } else {

@@ -23,6 +23,8 @@ if ($effectivePolicy -eq 'Restricted') {
     Write-Host "Execution policy is '$effectivePolicy' - OK." -ForegroundColor Green
 }
 
+. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+
 $ClaudeBin = Join-Path $env:USERPROFILE '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 
@@ -66,7 +68,7 @@ if (Test-Path $ClaudeExe) {
             exit 1
         }
         # Basic sanity check: the script should contain PowerShell-like content
-        if ($installScript -notmatch 'param|function|Install|claude' ) {
+        if (-not (REGEX_TestLooksLikePowerShellScript -Content $installScript)) {
             Write-Error "Downloaded content does not look like a PowerShell install script -- URL may have changed"
             exit 1
         }
