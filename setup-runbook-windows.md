@@ -8,7 +8,78 @@
 
 ---
 
-## Sections 1–6 — Install Dev Tools
+## Section 0 — Post-OneDrive Migration Cleanup
+
+> 📝 **Note:** Skip this section if OneDrive Documents redirection was never enabled, or if this is a fresh machine where OneDrive "Known Folder Move" has already been disabled.
+
+If you previously ran this runbook (or any scripts that write PowerShell profiles) while OneDrive Documents redirection was active, then disabled the redirection, stale profile files may be stranded in the old OneDrive location. These need to be cleaned up before rerunning the runbook, otherwise both old and new profiles may exist and cause confusion.
+
+### 0a. Verify the redirection is actually off
+
+> ⚠️ **Claude Code note:** Run this check and show the result to the user before proceeding.
+
+```powershell
+$docsDir = [Environment]::GetFolderPath('MyDocuments')
+$defaultDir = Join-Path $env:USERPROFILE "Documents"
+if ($docsDir -eq $defaultDir) {
+    Write-Host "OK: Documents points to $docsDir (no OneDrive redirection)" -ForegroundColor Green
+} else {
+    Write-Host "WARN: Documents is still redirected to $docsDir" -ForegroundColor Yellow
+    Write-Host "  Disable OneDrive Known Folder Move before continuing." -ForegroundColor Yellow
+}
+```
+
+### 0b. Remove stale PowerShell profiles from the old OneDrive location
+
+> ⚠️ **Claude Code note:** Only delete profiles that contain micromamba/conda init blocks or Oh My Posh lines. If a profile has user-customized content beyond what the runbook scripts write, show it to the user and ask before deleting.
+
+Check for stale profiles:
+
+```powershell
+$staleLocations = @(
+    "$env:USERPROFILE\OneDrive\Documents\WindowsPowerShell\profile.ps1",
+    "$env:USERPROFILE\OneDrive\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1",
+    "$env:USERPROFILE\OneDrive\Documents\PowerShell\profile.ps1",
+    "$env:USERPROFILE\OneDrive\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+)
+foreach ($p in $staleLocations) {
+    if (Test-Path $p) {
+        Write-Host "FOUND: $p" -ForegroundColor Yellow
+    }
+}
+```
+
+For each file found, inspect its contents. If it only contains runbook-managed blocks (micromamba init, conda init, Oh My Posh), delete it. If the containing directory is empty afterward, delete the directory too.
+
+### 0c. Remove stale shell hook files
+
+Micromamba's `shell init` may have written hook scripts to the old Documents path. Check and remove:
+
+```powershell
+$staleHookDirs = @(
+    "$env:USERPROFILE\OneDrive\Documents\WindowsPowerShell\Modules",
+    "$env:USERPROFILE\OneDrive\Documents\PowerShell\Modules"
+)
+foreach ($d in $staleHookDirs) {
+    if (Test-Path $d) {
+        Write-Host "FOUND: $d" -ForegroundColor Yellow
+    }
+}
+```
+
+### 0d. Verify clean state
+
+After cleanup, confirm no stale profiles remain and that the current Documents path is correct:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/verify-prerequisites.ps1
+```
+
+The OneDrive redirection warning should no longer appear.
+
+---
+
+## Sections 1-6 — Install Dev Tools
 
 Installs Git for Windows, GitHub Desktop, VS Code, Chrome, Windows Terminal, and PowerShell 7 via a single idempotent script. Already-installed apps are skipped.
 
@@ -168,6 +239,7 @@ This section documents issues found during the first run of the runbook on a Win
 ```markdown
 # setup-runbook-windows status
 
+- [ ] OneDrive cleanup complete (Section 0, if applicable)
 - [ ] Dev tools installed (install-apps.ps1)
 - [ ] Oh My Posh installed (if chosen)
 - [ ] Oh My Posh font configured (if chosen, manual)
