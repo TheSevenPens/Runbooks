@@ -159,7 +159,7 @@ if (Test-Path (Join-Path $CloneDir '.git')) {
 Write-Host ""
 if ($FailCount -gt 0) {
     Write-Host "$FailCount step(s) failed. Review the errors above, then re-run." -ForegroundColor Red
-    exit 1
+    return
 } else {
     Write-Host "Bootstrap complete." -ForegroundColor Green
     Write-Host ""
@@ -168,5 +168,5 @@ if ($FailCount -gt 0) {
     Write-Host "  claude" -ForegroundColor White
     Write-Host ""
     Write-Host "Then tell Claude: ""Follow the setup runbook at setup-runbook-windows.md""" -ForegroundColor White
-    exit 0
+    return
 }
