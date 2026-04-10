@@ -105,15 +105,56 @@ if (Test-Path $ClaudeExe) {
     }
 
     if (Test-Path $ClaudeExe) {
-        # Ensure the bin directory is on PATH for this session
-        if (-not ($env:Path -split ';' | Where-Object { $_ -ieq $ClaudeBin })) {
-            $env:Path = "$ClaudeBin;$env:Path"
-        }
         $claudeVer = & $ClaudeExe --version 2>&1
         Write-Host "Claude Code installed: $claudeVer" -ForegroundColor Green
     } elseif ($FailCount -eq 0) {
         Write-Error "Installation appeared to succeed but $ClaudeExe was not found."
         $FailCount++
+    }
+}
+
+# Ensure Claude bin directory is on the user PATH permanently (registry)
+# and in the current session. The official installer puts the binary in
+# ~/.local/bin but doesn't always add it to PATH.
+if (Test-Path $ClaudeExe) {
+    $currentUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (-not $currentUserPath) { $currentUserPath = '' }
+    $pathEntries = $currentUserPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+
+    if ($pathEntries | Where-Object { $_ -ieq $ClaudeBin }) {
+        Write-Host "$ClaudeBin is already on the user PATH." -ForegroundColor Green
+    } else {
+        Write-Host "Adding $ClaudeBin to user PATH (registry)..." -ForegroundColor Cyan
+        $pathEntries += $ClaudeBin
+        $newPath = ($pathEntries -join ';')
+
+        [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true).SetValue(
+            'Path', $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString
+        )
+
+        # Broadcast WM_SETTINGCHANGE so new shells pick up the change
+        if (-not ('Win32.NativeMethods' -as [type])) {
+            Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(
+    IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam,
+    uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+        }
+        $HWND_BROADCAST = [IntPtr]0xffff
+        $WM_SETTINGCHANGE = 0x1a
+        $result = [UIntPtr]::Zero
+        [Win32.NativeMethods]::SendMessageTimeout(
+            $HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero,
+            'Environment', 2, 5000, [ref]$result
+        ) | Out-Null
+
+        Write-Host "PATH updated permanently. New terminals will find 'claude'." -ForegroundColor Green
+    }
+
+    # Also fix the current session
+    if (-not ($env:Path -split ';' | Where-Object { $_ -ieq $ClaudeBin })) {
+        $env:Path = "$ClaudeBin;$env:Path"
     }
 }
 
