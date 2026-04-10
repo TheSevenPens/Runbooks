@@ -132,9 +132,18 @@ if (Test-Path (Join-Path $CloneDir '.git')) {
     }
 
     Write-Host "Cloning $RepoUrl to $CloneDir..." -ForegroundColor Cyan
+    Write-Host "(The repo is private -- Git Credential Manager will open a browser window for GitHub auth)" -ForegroundColor Yellow
+
+    # git writes progress to stderr, which PowerShell treats as an error
+    # under $ErrorActionPreference = 'Stop'. Temporarily relax it.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     & git clone $RepoUrl $CloneDir 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "git clone failed (exit code $LASTEXITCODE)"
+    $cloneExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEAP
+
+    if ($cloneExit -ne 0) {
+        Write-Error "git clone failed (exit code $cloneExit)"
         $FailCount++
     } elseif (Test-Path (Join-Path $CloneDir '.git')) {
         Write-Host "Repo cloned successfully." -ForegroundColor Green
