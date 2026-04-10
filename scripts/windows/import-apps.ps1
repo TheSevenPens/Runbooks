@@ -20,7 +20,7 @@ param(
     [string]$InFile = ""
 )
 
-. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0

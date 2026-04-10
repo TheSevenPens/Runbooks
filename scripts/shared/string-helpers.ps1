@@ -1,12 +1,12 @@
-# regex-helpers.ps1 -- Centralized regex functions for runbook scripts
+# string-helpers.ps1 -- Shared string operation functions for runbook scripts
 #
-# All regex patterns used by active scripts are isolated here so they
-# can be reviewed, tested, and understood in one place. Each function
-# documents its input, output, and what the pattern matches.
+# Reusable STRINGOP_* functions used across macOS and Windows scripts.
+# All functions use string operations only (no regex). See docs/ARCHITECTURE.md
+# "Regex avoidance" for the policy on when regex is acceptable.
 #
 # Usage: dot-source this file at the top of any script that needs it:
-#   . (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')   # from scripts/mac/
-#   . (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')   # from scripts/windows/
+#   . (Join-Path $PSScriptRoot '../shared/string-helpers.ps1')   # from scripts/mac/
+#   . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')   # from scripts/windows/
 
 function STRINGOP_SplitAndCleanPath {
     <#

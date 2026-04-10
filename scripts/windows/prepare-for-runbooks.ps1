@@ -23,7 +23,7 @@ if ($effectivePolicy -eq 'Restricted') {
     Write-Host "Execution policy is '$effectivePolicy' - OK." -ForegroundColor Green
 }
 
-. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 
 $ClaudeBin = Join-Path $env:USERPROFILE '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'

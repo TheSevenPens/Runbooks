@@ -11,7 +11,7 @@
     Invoke: pwsh -NoProfile -File scripts/mac/install-apps.ps1
 #>
 
-. (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '../shared/string-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -104,7 +104,7 @@ function Resolve-Executable {
     return ''
 }
 
-# STRINGOP_GetToolVersion is now STRINGOP_GetToolVersion in shared/regex-helpers.ps1
+# STRINGOP_GetToolVersion is now STRINGOP_GetToolVersion in shared/string-helpers.ps1
 
 # --- Main loop ---
 

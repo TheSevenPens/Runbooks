@@ -17,7 +17,7 @@
 # Output: Structured lines prefixed with OK / SKIP / FAIL / INFO
 # Exit code: 0 on success, 1 on any failure
 
-. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0

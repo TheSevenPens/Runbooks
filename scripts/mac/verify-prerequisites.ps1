@@ -12,7 +12,7 @@
     Invoke: pwsh -NoProfile -File scripts/mac/verify-prerequisites.ps1
 #>
 
-. (Join-Path $PSScriptRoot '../shared/regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '../shared/string-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0

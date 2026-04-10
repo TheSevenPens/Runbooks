@@ -252,7 +252,7 @@ Even with `[regex]::Escape()` on the pattern, the replacement string is still in
 
 Avoid regex in scripts. Most string checks (substring search, starts-with, splitting on a delimiter) are clearer and safer with `.Contains()`, `.StartsWith()`, `.IndexOf()`, `.Trim()`, and `-split`.
 
-If regex is genuinely needed (capture groups, character classes, anchors), isolate it in a `REGEX_` prefixed function in `scripts/shared/regex-helpers.ps1`. The function must document:
+If regex is genuinely needed (capture groups, character classes, anchors), isolate it in a `REGEX_` prefixed function in `scripts/shared/string-helpers.ps1`. The function must document:
 - What the pattern matches (with examples)
 - Input and output types
 - Why string operations are not sufficient

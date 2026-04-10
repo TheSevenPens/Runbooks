@@ -24,7 +24,7 @@ $ClaudeBin = Join-Path $HOME '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 $FailCount = 0
 
-# Inline copies from scripts/shared/regex-helpers.ps1
+# Inline copies from scripts/shared/string-helpers.ps1
 # (bootstrap runs before the repo is cloned, so it cannot dot-source the shared file)
 function STRINGOP_TestContainsAnyWord {
     param([string]$Text, [string[]]$Words)

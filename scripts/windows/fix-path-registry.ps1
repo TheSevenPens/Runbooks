@@ -13,7 +13,7 @@
 # Output: Structured lines prefixed with OK / WARN / INFO / SKIP
 # Exit code: 0 on success, 1 on failure
 
-. (Join-Path $PSScriptRoot '..\shared\regex-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 
 $ErrorActionPreference = 'Stop'
 $Changed = $false
