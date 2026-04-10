@@ -23,6 +23,53 @@ if ($docsDir -ne $defaultDocsDir) {
     Write-Host '  Scripts that hardcode $env:USERPROFILE\Documents will look in the wrong place'
 }
 
+# --- BOM check on bash files ---
+# PowerShell 5.1's -Encoding UTF8 adds a BOM (EF BB BF) which bash interprets
+# as literal bytes, breaking the first command in the file.  PS7 does not add
+# a BOM.  Check common bash config files for accidental BOMs.
+
+$bashFiles = @(
+    @{ Name = ".bash_profile"; Path = "$env:USERPROFILE\.bash_profile" },
+    @{ Name = ".bashrc";       Path = "$env:USERPROFILE\.bashrc" }
+)
+foreach ($bf in $bashFiles) {
+    if (Test-Path $bf.Path) {
+        $bytes = [System.IO.File]::ReadAllBytes($bf.Path)
+        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            Write-Host "WARN: $($bf.Name) has a UTF-8 BOM - bash will misparse the first line"
+            Write-Host "  Fix: rewrite without BOM, e.g.: [System.IO.File]::WriteAllText('$($bf.Path)', (Get-Content '$($bf.Path)' -Raw))"
+        }
+    }
+}
+
+# --- Non-ASCII check on .ps1 files ---
+# PS5.1 cannot parse multi-byte UTF-8 (em-dash, smart quotes, etc.) in files
+# without a BOM.  Since these scripts must work under PS5.1, they must be
+# ASCII-only.  Scan all .ps1 files in the scripts directory for offenders.
+
+$scriptRoot = Join-Path $PSScriptRoot ""  # normalize trailing separator
+if (Test-Path $scriptRoot) {
+    $ps1Files = Get-ChildItem $scriptRoot -Filter "*.ps1" -ErrorAction SilentlyContinue
+    foreach ($f in $ps1Files) {
+        $raw = [System.IO.File]::ReadAllBytes($f.FullName)
+        for ($i = 0; $i -lt $raw.Length; $i++) {
+            if ($raw[$i] -gt 127) {
+                # Skip BOM at position 0-2 (harmless in .ps1)
+                if ($i -le 2 -and $raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF) {
+                    $i = 2  # skip past BOM
+                    continue
+                }
+                # Find approximate line number
+                $lineNum = 1
+                for ($j = 0; $j -lt $i; $j++) { if ($raw[$j] -eq 10) { $lineNum++ } }
+                $hexByte = '0x{0:X2}' -f $raw[$i]
+                Write-Host "WARN: $($f.Name) contains non-ASCII byte $hexByte at line $lineNum - PS5.1 may fail to parse"
+                break  # one warning per file is enough
+            }
+        }
+    }
+}
+
 # --- Resolve winget ---
 # winget is an AppX execution alias that may not be on PATH (especially in
 # Git Bash or after a PATH refresh from the registry).  Resolve it once up

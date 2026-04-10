@@ -47,6 +47,35 @@ These caused real issues during development and are documented in the runbooks, 
 - Wants deterministic steps to eventually become **standalone scripts** (idempotent, structured output, no interactivity). See docs/FUTURES.md.
 - Wants runbooks to be **living documents** — when you hit a problem and find a fix, update the runbook so the next run doesn't hit it again.
 
+## File encoding rules
+
+These rules exist because PowerShell 5.1 and bash have incompatible encoding requirements, and getting them wrong causes silent failures that are hard to diagnose. See `setup-runbook-windows.md` "First-Run Discoveries" items 2 and 6, and `mise-env-runbook.md` items 3 and the BOM known issue for the full incident history.
+
+### The core conflict
+
+- **PowerShell 5.1** parses UTF-8 files without BOM by assuming single-byte characters. Multi-byte UTF-8 (em-dash, smart quotes, etc.) misaligns its byte tracker, producing cascading parse errors on *subsequent* lines that look completely unrelated.
+- **Bash** treats a UTF-8 BOM (`EF BB BF`) as literal bytes, prepending garbage to the first command (e.g., `$'\357\273\277eval': command not found`).
+- **PowerShell 5.1's** `-Encoding UTF8` parameter **always adds a BOM**. PowerShell 7's `-Encoding UTF8` does **not** add a BOM (Microsoft fixed it in PS7). Since scripts in this repo may run under either version, treat `-Encoding UTF8` as "will add a BOM."
+
+### Rules
+
+1. **`.ps1` files: ASCII-only content, no BOM needed.** Never use em-dashes (`---`), smart quotes, or any non-ASCII character in PowerShell scripts. Use `-` (hyphen), `'` / `"` (straight quotes) instead. PS5.1 parses ASCII correctly regardless of BOM.
+
+2. **`.bash_profile`, `.bashrc`, `.sh` files: no BOM, UTF-8 is fine.** Never use PowerShell's `-Encoding UTF8` to write files that bash will read. If a PowerShell script must write a bash file, use `[System.IO.File]::WriteAllText($path, $content)` (which writes UTF-8 without BOM) or `Out-File -Encoding ASCII`.
+
+3. **When editing files with the Claude Code Edit/Write tools**, the output is UTF-8 without BOM (safe for both bash and PS5.1). But avoid introducing non-ASCII characters in `.ps1` files -- the Edit tool doesn't add a BOM to protect against them.
+
+4. **Cross-shell files** (files read by both PowerShell and bash, like environment configs): use ASCII-only content, no BOM.
+
+### Quick reference
+
+| File type | BOM? | Non-ASCII? | Safe write method |
+|-----------|------|------------|-------------------|
+| `.ps1` | optional | **NO** (ASCII only) | Edit tool, `Set-Content` (any encoding) |
+| `.bash_profile` / `.sh` | **NO** | OK | Edit tool, `[System.IO.File]::WriteAllText()` |
+| `.md` / docs | don't care | OK | Edit tool, anything |
+| `.json` | no | OK | `Set-Content -Encoding UTF8` is fine (JSON parsers skip BOM) |
+
 ## When updating runbooks
 
 - Keep Claude-specific instructions (callout markers, notes) — they're there to help future runs.
