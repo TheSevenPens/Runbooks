@@ -113,8 +113,14 @@ Add-Content $PROFILE 'mise activate pwsh | Out-String | Invoke-Expression'
 
 ### Windows (Git Bash)
 
+> ⚠️ **Claude Code note:** `mise activate bash` is broken on Git Bash for Windows. It replaces the entire PATH with Windows-style semicolon-separated paths (`C:\...;C:\...`), destroying bash's colon-separated PATH and making all commands (including `ls`, `tr`, `head`) unfindable. **Use shims instead of activation for Git Bash.**
+
 ```bash
-echo 'eval "$(mise activate bash)"' >> ~/.bash_profile
+# Add mise and shims to PATH (do NOT use `mise activate bash` -- it breaks Git Bash PATH)
+cat >> ~/.bash_profile << 'EOF'
+# mise - add mise and shims to PATH
+export PATH="$HOME/AppData/Local/Microsoft/WinGet/Packages/jdx.mise_Microsoft.Winget.Source_8wekyb3d8bbwe/mise/bin:$HOME/AppData/Local/mise/shims:$PATH"
+EOF
 ```
 
 ### Verify activation
@@ -221,6 +227,41 @@ Present results to the user in this format:
 | Tools not on PATH after install | Shell wasn't restarted after adding the activation line. Close and reopen terminal. |
 | Want to pin a specific version | Use `mise use -g node@22.15.0` instead of `node@lts`. The version is recorded in `~/.config/mise/config.toml`. |
 | Need a conda-forge-only package later | mise doesn't cover conda-forge. If you need a package only available there (e.g., scientific Python with MKL), install miniconda alongside mise for that specific use case. |
+| `mise activate bash` breaks Git Bash on Windows | mise outputs Windows-style semicolon-separated paths (`C:\...;C:\...`) which replaces bash's colon-separated PATH, breaking all commands including basic ones like `ls`. Use shims instead of activation for Git Bash (see Section 2). |
+| PowerShell 5.1 `chpwd` warning | `mise activate pwsh` prints `WARNING: mise: chpwd functionality requires PowerShell version 7 or higher`. Harmless -- tool activation still works, only the auto-switch-on-cd feature is unavailable. Suppress with `$env:MISE_PWSH_CHPWD_WARNING=0`. |
+| `mise doctor` reports "shims not on PATH" | Expected when using activation (not shims) in PowerShell. Activation manages PATH dynamically instead of using shims. For Git Bash (where we use shims), add `$HOME/AppData/Local/mise/shims` to PATH. |
+| PowerShell `-Encoding UTF8` adds BOM to `.bash_profile` | PowerShell's `Add-Content -Encoding UTF8` writes a UTF-8 BOM (`EF BB BF`) which bash interprets as a literal command (`$'\357\273\277eval'`). Write `.bash_profile` with a tool that doesn't add BOM, or use `[System.IO.File]::WriteAllText()`. |
+| No `remove-micromamba.ps1` script | Manual removal required (see Section 0). Consider creating one if this path is taken often. |
+
+---
+
+## First-Run Discoveries (Windows on ARM, 2026-04-09)
+
+This section documents issues found during the first run of the mise runbook on a Windows 11 ARM64 (Snapdragon) machine.
+
+### 1. mise installs native ARM64 binaries
+
+Unlike micromamba (which only has x86-64 builds), mise downloaded native ARM64 binaries for all three tools: `node-v24.14.1-win-arm64.zip`, `cpython-3.12.13-aarch64-pc-windows-msvc`, and `gh_2.89.0_windows_arm64.zip`. mise itself is also native ARM64 (`windows-arm64`). This is a significant improvement over the conda-family setup.
+
+### 2. `mise activate bash` destroys Git Bash PATH
+
+**Symptom:** After `eval "$(mise activate bash)"`, all commands including `ls`, `tr`, and `head` became unfindable.
+
+**Root cause:** `mise activate bash` uses `mise hook-env` which outputs PATH entries in Windows format (`C:\Users\...`) with semicolons as separators. Git Bash expects Unix-style paths (`/c/Users/...`) with colons. The activation hook replaces the entire PATH with the Windows-format string, which bash can't parse.
+
+**Fix:** Use shims for Git Bash instead of activation. Add `$HOME/AppData/Local/mise/shims` to PATH in `.bash_profile`.
+
+### 3. PowerShell BOM in `.bash_profile`
+
+**Symptom:** Bash reported `$'\357\273\277eval': command not found`.
+
+**Root cause:** PowerShell's `Add-Content -Encoding UTF8` writes a UTF-8 BOM (byte order mark: `EF BB BF`) at the start of the file. Bash interprets these bytes as part of the first command, prepending garbage to `eval`.
+
+**Fix:** Write `.bash_profile` without BOM (use a non-PowerShell tool, or `[System.IO.File]::WriteAllText()`).
+
+### 4. Micromamba removal was fully manual
+
+The runbook noted there's no `remove-micromamba.ps1` script. Removal required: deleting two directories (`AppData\Local\micromamba\` and `~/micromamba/`), cleaning PATH, removing the CMD AutoRun registry entry, and stripping mamba init blocks from PowerShell profiles and `.bash_profile`. All steps succeeded without issues.
 
 ---
 
