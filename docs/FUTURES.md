@@ -319,7 +319,7 @@ New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and 
 3. Use the mise runbook on the next fresh machine. See if it's actually better in practice.
 4. If yes, retire `conda-env-runbook.md` and move the conda scripts into `scripts/archive/`. If no, walk away — no harm done.
 
-### Drop Git Bash as a supported shell on Windows
+### Drop Git Bash as a supported shell on Windows --- Done (2026-04-09)
 
 **The observation.** Git Bash (MSYS2) is the source of a disproportionate share of issues on Windows. Every tool that interacts with PATH, writes config files, or spawns subshells has to navigate the impedance mismatch between Unix-style paths (`/c/Users/...` with `:` separators) and Windows-style paths (`C:\Users\...` with `;` separators). Tools get this wrong regularly, and when they do, the failures are confusing and hard to diagnose.
 
@@ -365,6 +365,16 @@ New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and 
 **Recommendation:** Drop Git Bash. The complexity cost of supporting it (BOM rules, path format translation, broken subshells, per-tool workarounds) exceeds the value. PowerShell 7 is the natural Windows shell for this workflow.
 
 **When to do this:** Next time the Windows runbook is revised for a fresh machine setup. It's a cleanup task, not urgent.
+
+**Implemented 2026-04-09.** Changes made:
+- `verify-shell-integration.ps1`: Removed Git Bash test section
+- `micromamba-shell-init.ps1`: Removed `shell init -s bash`, `.bash_profile` verification, and `.bash_profile` MAMBA_EXE check
+- `remove-conda.ps1`: Removed `.bash_profile` cleanup (Step 7) and `.bash_profile` MAMBA_EXE check
+- `verify-prerequisites.ps1`: Removed `.bash_profile` BOM check and MAMBA_EXE consistency check
+- `conda-env-runbook.md`: Removed Git Bash from Windows shell matrix and checklist
+- `mise-env-runbook.md`: Removed Windows Git Bash section, updated test matrix and checklist
+- `setup-runbook-windows.md`: Updated Git for Windows note
+- `CLAUDE.md`: Updated key lessons and encoding rules (bash concern now macOS-only)
 
 ### Runbook diffing between machines
 

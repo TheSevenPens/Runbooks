@@ -37,7 +37,7 @@ These caused real issues during development and are documented in the runbooks, 
 
 - **PATH changes don't take effect in the current shell.** After modifying PATH, the user needs to open a new terminal. Don't tell them to "restart the terminal" if they don't have one open — be specific about what they need to do.
 - **The Windows user PATH registry key must be `REG_EXPAND_SZ`**, not `REG_SZ`. If it's the wrong type, CMD silently ignores user PATH entries. Always verify after modifying PATH.
-- **Micromamba's CMD shell init (`micromamba shell init -s cmd.exe`) mangles paths when run from Git Bash.** Always run it from PowerShell.
+- **Git Bash is not a supported shell on Windows.** Git for Windows is installed (for `git` CLI), but Git Bash is not configured, tested, or maintained by the runbooks. `mise activate bash` breaks PATH, BOM issues affect `.bash_profile`, and MSYS2 path format mismatches cause tool failures. Use PowerShell 7 or CMD instead. See `docs/FUTURES.md` for the full rationale.
 - **Conda and micromamba CMD hooks conflict.** Both `conda_hook.bat` and `mamba_hook.bat` guard on `CONDA_SHLVL` — whichever loads second silently exits. The runbook now removes conda entirely to avoid this.
 
 ## User preferences
@@ -61,20 +61,20 @@ These rules exist because PowerShell 5.1 and bash have incompatible encoding req
 
 1. **`.ps1` files: ASCII-only content, no BOM needed.** Never use em-dashes (`---`), smart quotes, or any non-ASCII character in PowerShell scripts. Use `-` (hyphen), `'` / `"` (straight quotes) instead. PS5.1 parses ASCII correctly regardless of BOM.
 
-2. **`.bash_profile`, `.bashrc`, `.sh` files: no BOM, UTF-8 is fine.** Never use PowerShell's `-Encoding UTF8` to write files that bash will read. If a PowerShell script must write a bash file, use `[System.IO.File]::WriteAllText($path, $content)` (which writes UTF-8 without BOM) or `Out-File -Encoding ASCII`.
+2. **`.bash_profile`, `.bashrc`, `.sh` files (macOS only): no BOM, UTF-8 is fine.** On Windows, Git Bash is not a supported shell, so there are no bash config files to manage. On macOS, never use PowerShell's `-Encoding UTF8` to write files that bash/zsh will read --- use `[System.IO.File]::WriteAllText($path, $content)` (UTF-8 without BOM) instead.
 
 3. **When editing files with the Claude Code Edit/Write tools**, the output is UTF-8 without BOM (safe for both bash and PS5.1). But avoid introducing non-ASCII characters in `.ps1` files -- the Edit tool doesn't add a BOM to protect against them.
-
-4. **Cross-shell files** (files read by both PowerShell and bash, like environment configs): use ASCII-only content, no BOM.
 
 ### Quick reference
 
 | File type | BOM? | Non-ASCII? | Safe write method |
 |-----------|------|------------|-------------------|
 | `.ps1` | optional | **NO** (ASCII only) | Edit tool, `Set-Content` (any encoding) |
-| `.bash_profile` / `.sh` | **NO** | OK | Edit tool, `[System.IO.File]::WriteAllText()` |
+| `.bash_profile` / `.sh` (macOS) | **NO** | OK | Edit tool, `[System.IO.File]::WriteAllText()` |
 | `.md` / docs | don't care | OK | Edit tool, anything |
 | `.json` | no | OK | `Set-Content -Encoding UTF8` is fine (JSON parsers skip BOM) |
+
+> 📝 **Note:** On Windows, there are no bash config files to manage --- Git Bash is not a supported shell. The BOM concern only applies to macOS scripts that write `~/.bash_profile` or `~/.zshrc`.
 
 ## When updating runbooks
 

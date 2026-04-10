@@ -108,7 +108,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-
 > | PowerShell 7 | `Microsoft.PowerShell` | `pwsh --version` |
 
 > 📝 **Notes:**
-> - **Git for Windows** gives you: `git` CLI in any terminal, Git Bash (right-click → "Open Git Bash here"), and Git Credential Manager.
+> - **Git for Windows** gives you: `git` CLI in any terminal and Git Credential Manager. (Git Bash is also installed but is not a supported shell for runbook automation --- see `docs/FUTURES.md`.)
 > - **VS Code + micromamba:** Once the `node1` environment is created (see Section 8), select it as your Python interpreter in VS Code — open a `.py` file, click the interpreter selector in the status bar, and choose `node1`.
 > - **PowerShell 7** installs alongside 5.1 — it does not replace it. In Windows Terminal it appears as "PowerShell" (vs "Windows PowerShell"). Launch with `pwsh`.
 

@@ -44,7 +44,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/remove-c
 > 1. Remove `%USERPROFILE%\AppData\Local\micromamba\` and `%USERPROFILE%\micromamba\`
 > 2. Remove micromamba entries from user PATH
 > 3. Remove the CMD AutoRun registry entry if it points to `mamba_hook.bat`
-> 4. Remove micromamba init blocks from PowerShell profiles and `~/.bash_profile`
+> 4. Remove micromamba init blocks from PowerShell profiles
 
 > ⚠️ **Manual step:** Close and reopen your terminal after removal to pick up the cleaned PATH.
 
@@ -109,19 +109,11 @@ Add-Content $PROFILE 'mise activate pwsh | Out-String | Invoke-Expression'
 
 ### Windows (CMD)
 
-> 📝 **Note:** mise does not have native CMD support. Use PowerShell 7 or Git Bash on Windows.
+> 📝 **Note:** mise does not have native CMD support. Use PowerShell 7 on Windows.
 
-### Windows (Git Bash)
+### ~~Windows (Git Bash)~~ --- Dropped
 
-> ⚠️ **Claude Code note:** `mise activate bash` is broken on Git Bash for Windows. It replaces the entire PATH with Windows-style semicolon-separated paths (`C:\...;C:\...`), destroying bash's colon-separated PATH and making all commands (including `ls`, `tr`, `head`) unfindable. **Use shims instead of activation for Git Bash.**
-
-```bash
-# Add mise and shims to PATH (do NOT use `mise activate bash` -- it breaks Git Bash PATH)
-cat >> ~/.bash_profile << 'EOF'
-# mise - add mise and shims to PATH
-export PATH="$HOME/AppData/Local/Microsoft/WinGet/Packages/jdx.mise_Microsoft.Winget.Source_8wekyb3d8bbwe/mise/bin:$HOME/AppData/Local/mise/shims:$PATH"
-EOF
-```
+> 📝 **Note:** Git Bash is no longer a supported shell on Windows. `mise activate bash` is broken on Git Bash (it replaces PATH with Windows-style paths, destroying the shell). See `docs/FUTURES.md` "Drop Git Bash as a supported shell on Windows" for the full rationale.
 
 ### Verify activation
 
@@ -192,8 +184,9 @@ Test that mise-managed tools are available in each shell. Unlike conda, there's 
 
 | Shell | Test command | What to check |
 |---|---|---|
-| PowerShell 7 | `pwsh -NoProfile -Command "node --version; python --version; gh --version"` | All three versions print |
-| Git Bash | `bash -l -i -c "node --version && python --version && gh --version"` | All three versions print |
+| PowerShell 7 | `pwsh -Command "node --version; python --version; gh --version"` | All three versions print |
+
+> 📝 **Note:** Git Bash is no longer a supported shell on Windows (see `docs/FUTURES.md`).
 
 Present results to the user in this format:
 
@@ -210,7 +203,6 @@ Present results to the user in this format:
 | Shell        | node | python | gh |
 |--------------|------|--------|----|
 | PowerShell 7 | OK / FAIL | OK / FAIL | OK / FAIL |
-| Git Bash     | OK / FAIL | OK / FAIL | OK / FAIL |
 ```
 
 > ⚠️ **Claude Code note:** Shell activation only works in interactive shells. Use `zsh -i` for zsh. For bash on macOS, use `bash -l -i` (login + interactive) because `~/.bash_profile` is a login-shell file.
@@ -303,8 +295,7 @@ The runbook noted there's no `remove-micromamba.ps1` script. Removal required: d
 - [ ] Conda/micromamba removed (if previously installed)
 - [ ] mise installed via `winget install jdx.mise`
 - [ ] mise --version verified
-- [ ] Activation line added to PowerShell profile
-- [ ] Activation line added to ~/.bash_profile (Git Bash)
+- [ ] Activation line added to PowerShell profile(s)
 - [ ] Terminal restarted
 - [ ] `mise doctor` passes
 - [ ] Tools installed: `mise use -g node@lts python@3.12 gh@latest`

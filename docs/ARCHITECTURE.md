@@ -28,7 +28,7 @@ docs/FUTURES.md                — Roadmap and planned improvements
 4. `remove-conda.ps1` (if conda present)
 5. Micromamba install (manual invoke of official installer)
 6. `fix-path-registry.ps1` — fix registry type, clean stale entries
-7. `micromamba-shell-init.ps1` — hooks for PowerShell 5.1/7, bash, CMD
+7. `micromamba-shell-init.ps1` — hooks for PowerShell 5.1/7 and CMD
 8. `micromamba create -n node1` — create environment
 9. `verify-shell-integration.ps1` — confirm all shells work
 10. Post-setup manual sign-ins (GitHub Desktop, Chrome)
@@ -151,7 +151,7 @@ $raw = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 
 ### Micromamba CMD init is sensitive to working directory
 
-`micromamba shell init -s cmd.exe` treats the `-r` root prefix as relative to the current directory when run from Git Bash, producing a mangled `AutoRun` registry value. Always run it from PowerShell. `micromamba-shell-init.ps1` enforces this.
+`micromamba shell init -s cmd.exe` treats the `-r` root prefix as relative to the current directory when run from certain environments, producing a mangled `AutoRun` registry value. Always run it from PowerShell. `micromamba-shell-init.ps1` enforces this. (Git Bash was historically the main offender, but it is no longer a supported shell on Windows.)
 
 ### Conda and micromamba CMD hooks conflict
 

@@ -24,23 +24,8 @@ if ($docsDir -ne $defaultDocsDir) {
 }
 
 # --- BOM check on bash files ---
-# PowerShell 5.1's -Encoding UTF8 adds a BOM (EF BB BF) which bash interprets
-# as literal bytes, breaking the first command in the file.  PS7 does not add
-# a BOM.  Check common bash config files for accidental BOMs.
-
-$bashFiles = @(
-    @{ Name = ".bash_profile"; Path = "$env:USERPROFILE\.bash_profile" },
-    @{ Name = ".bashrc";       Path = "$env:USERPROFILE\.bashrc" }
-)
-foreach ($bf in $bashFiles) {
-    if (Test-Path $bf.Path) {
-        $bytes = [System.IO.File]::ReadAllBytes($bf.Path)
-        if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
-            Write-Host "WARN: $($bf.Name) has a UTF-8 BOM - bash will misparse the first line"
-            Write-Host "  Fix: rewrite without BOM, e.g.: [System.IO.File]::WriteAllText('$($bf.Path)', (Get-Content '$($bf.Path)' -Raw))"
-        }
-    }
-}
+# Removed: Git Bash is no longer a supported shell on Windows.
+# The BOM check is still relevant on macOS (see scripts/mac/verify-prerequisites.sh).
 
 # --- Non-ASCII check on .ps1 files ---
 # PS5.1 cannot parse multi-byte UTF-8 (em-dash, smart quotes, etc.) in files
@@ -184,14 +169,7 @@ foreach ($entry in $psProfilesToScan) {
     }
 }
 
-# .bash_profile
-$bpPath = "$env:USERPROFILE\.bash_profile"
-if (Test-Path $bpPath) {
-    $c = Get-Content $bpPath -Raw
-    if ($c -match 'export MAMBA_EXE="([^"]+)"') {
-        $mambaExeRefs[".bash_profile"] = $Matches[1]
-    }
-}
+# .bash_profile check removed -- Git Bash no longer supported on Windows.
 
 # .bat wrapper
 $batPath = "$env:USERPROFILE\micromamba\condabin\micromamba.bat"

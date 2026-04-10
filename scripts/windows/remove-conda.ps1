@@ -10,7 +10,7 @@
 #   4. Clean miniconda3 entries from PATH registry
 #   5. Clean conda references from CMD AutoRun
 #   6. Remove .condarc
-#   7. Clean conda init block from .bash_profile
+#   7. (skipped - Git Bash no longer supported on Windows)
 #   8. Clean conda init block from PowerShell profiles
 #   9. Clean stale conda entries from .conda\environments.txt
 #
@@ -78,14 +78,7 @@ foreach ($p in $psProfilesToCheck) {
     }
 }
 
-# Check .bash_profile
-$bashProfile = "$env:USERPROFILE\.bash_profile"
-if (Test-Path $bashProfile) {
-    $c = Get-Content $bashProfile -Raw
-    if ($c -match 'export MAMBA_EXE="([^"]+)"') {
-        $mambaExePaths += $Matches[1]
-    }
-}
+# .bash_profile check removed -- Git Bash no longer supported on Windows.
 
 # Deduplicate and check if any point inside miniconda3
 $mambaExePaths = $mambaExePaths | Select-Object -Unique
@@ -168,27 +161,7 @@ if ($staleRefs.Count -gt 0) {
         }
     }
 
-    # Fix .bash_profile
-    if (Test-Path $bashProfile) {
-        $c = Get-Content $bashProfile -Raw
-        $changed = $false
-        # Convert canonical Windows path to bash-style: C:\Users\... -> /c/Users/...
-        $bashCanonical = $canonicalPath -replace '\\', '/'
-        if ($bashCanonical -match '^([A-Za-z]):') {
-            $bashCanonical = '/' + $Matches[1].ToLower() + $bashCanonical.Substring(2)
-        }
-        foreach ($ref in $staleRefs) {
-            # Use literal string replacement to avoid regex special char issues
-            if ($c.Contains($ref)) {
-                $c = $c.Replace($ref, $bashCanonical)
-                $changed = $true
-            }
-        }
-        if ($changed) {
-            Set-Content -Path $bashProfile -Value $c -NoNewline -Encoding UTF8
-            Write-Host "OK: Updated MAMBA_EXE in .bash_profile"
-        }
-    }
+    # .bash_profile fix removed -- Git Bash no longer supported on Windows.
 }
 
 # --- Step 1: Back up environments ---
@@ -343,22 +316,10 @@ if (Test-Path $condarc) {
 }
 
 # --- Step 7: Clean .bash_profile ---
-
+# Dropped: Git Bash is no longer a supported shell on Windows.
 Write-Host ""
 Write-Host "--- Step 7: Clean conda from .bash_profile ---"
-$bashProfile = "$env:USERPROFILE\.bash_profile"
-if (Test-Path $bashProfile) {
-    $content = Get-Content $bashProfile -Raw
-    if ($content -match '# >>> conda initialize >>>') {
-        $cleaned = $content -replace '(?s)# >>> conda initialize >>>.*?# <<< conda initialize <<<\r?\n?', ''
-        Set-Content -Path $bashProfile -Value $cleaned -NoNewline -Encoding UTF8
-        Write-Host "OK: Removed conda init block from .bash_profile"
-    } else {
-        Write-Host "SKIP: .bash_profile has no conda init block"
-    }
-} else {
-    Write-Host "SKIP: .bash_profile not found"
-}
+Write-Host "SKIP: Git Bash no longer supported on Windows"
 
 # --- Step 8: Clean PowerShell profiles ---
 

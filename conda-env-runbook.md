@@ -10,7 +10,7 @@
 > | macOS | **miniconda** | micromamba's `libmamba::codesign()` fails with `Could not codesign executable: Invalid argument` during the linking phase on macOS 26 due to a `reproc::env::empty` bug. Confirmed broken on macOS 26.3.1 and 26.4. Not fixed upstream. See [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15 for the full root-cause writeup. |
 >
 > **Prerequisites (Windows):** see [setup-runbook-windows.md](setup-runbook-windows.md).
-> - **Git for Windows** — provides Git Bash, needed for bash shell init
+> - **Git for Windows** — provides `git` CLI and Git Credential Manager
 > - **winget** — ships with Windows 11; on Windows 10, install via Microsoft Store
 >
 > **Prerequisites (macOS):** see [setup-runbook-mac.md](setup-runbook-mac.md).
@@ -148,11 +148,13 @@ Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -U
 - Ensures micromamba's `AppData\Local\micromamba` directory is on PATH
 
 **micromamba-shell-init.ps1:**
-- Runs `micromamba shell init` for powershell, bash, and cmd.exe with root prefix `$env:USERPROFILE\micromamba`
+- Runs `micromamba shell init` for powershell and cmd.exe with root prefix `$env:USERPROFILE\micromamba`
 - Verifies the CMD AutoRun registry value points to `mamba_hook.bat`
-- Verifies `.bash_profile` and PowerShell profile contain micromamba hooks
+- Verifies PowerShell profile contains micromamba hooks
 
-> ⚠️ **Claude Code note:** The `cmd.exe` init is sensitive to the working directory — micromamba may treat the `-r` root prefix as a relative path and produce a mangled `AutoRun` value. The script runs from PowerShell (not Git Bash) to avoid this, and verifies the result.
+> ⚠️ **Claude Code note:** The `cmd.exe` init is sensitive to the working directory — micromamba may treat the `-r` root prefix as a relative path and produce a mangled `AutoRun` value. The script runs from PowerShell to avoid this, and verifies the result.
+>
+> 📝 **Note:** Git Bash is no longer a supported shell on Windows. `micromamba shell init -s bash` is not run. See `docs/FUTURES.md` for rationale.
 
 </details>
 
@@ -307,14 +309,13 @@ Test that the env manager's `activate` command works in every shell. Check that 
 > ```bash
 > powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/verify-shell-integration.ps1
 > ```
-> Tests PowerShell 5.1, PowerShell 7 (if installed), Git Bash, and CMD automatically.
+> Tests PowerShell 5.1, PowerShell 7 (if installed), and CMD automatically.
 
 | Shell | Test command | What to check |
 |---|---|---|
 | PowerShell 7 | `pwsh -NoProfile -Command "micromamba activate base"` | Command succeeds without error |
 | PowerShell 5.1 | `powershell -NoProfile -Command "micromamba activate base"` | Command succeeds without error |
 | CMD | Open CMD → run `micromamba activate base` | Command succeeds without error |
-| Git Bash | Open Git Bash → run `micromamba activate base` | Command succeeds without error |
 
 ### macOS
 
@@ -336,7 +337,6 @@ Present results to the user in this format:
 | PowerShell 7   | works / broken      |
 | PowerShell 5.1 | works / broken      |
 | CMD            | works / broken      |
-| Git Bash       | works / broken      |
 ```
 
 **macOS:**
@@ -402,7 +402,7 @@ Present results to the user in this format:
 - [ ] Conda shell hooks and PATH entries cleaned up
 - [ ] Micromamba installed
 - [ ] PATH registry type verified (`REG_EXPAND_SZ`)
-- [ ] Micromamba shell init completed (powershell, bash, cmd.exe)
+- [ ] Micromamba shell init completed (powershell, cmd.exe)
 - [ ] Micromamba CMD AutoRun path verified
 - [ ] Micromamba verified (`micromamba --version`)
 - [ ] Environments restored (if migrating from conda)

@@ -104,28 +104,9 @@ if ($pwsh7Path) {
     $Results += [PSCustomObject]@{ Shell = "PowerShell 7"; Status = "SKIP" }
 }
 
-# Git Bash - need to find bash.exe
-$gitBashPaths = @(
-    "C:\Program Files\Git\bin\bash.exe",
-    "C:\Program Files (x86)\Git\bin\bash.exe"
-)
-$bashExe = $null
-foreach ($path in $gitBashPaths) {
-    if (Test-Path $path) { $bashExe = $path; break }
-}
-if (-not $bashExe) {
-    $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
-    if ($bashCmd) { $bashExe = $bashCmd.Source }
-}
-
-if ($bashExe) {
-    Test-ShellActivate -ShellName "Git Bash" -Executable $bashExe -Arguments @(
-        '-l', '-i', '-c', '"micromamba activate base && echo ACTIVATE_OK"'
-    )
-} else {
-    Write-Host "SKIP: Git Bash - bash.exe not found"
-    $Results += [PSCustomObject]@{ Shell = "Git Bash"; Status = "SKIP" }
-}
+# Git Bash - dropped as a supported shell on Windows (see docs/FUTURES.md).
+# mise activate bash breaks PATH, BOM issues with .bash_profile, MSYS2 path
+# format mismatches. PowerShell 7 + CMD cover all Windows automation needs.
 
 # CMD - test via cmd.exe /c which triggers the AutoRun hook automatically
 $autoRunKey = 'HKCU:\Software\Microsoft\Command Processor'

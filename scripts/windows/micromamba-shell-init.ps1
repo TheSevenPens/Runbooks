@@ -5,9 +5,9 @@
 #
 # Actions:
 #   1. Locate micromamba binary
-#   2. Run shell init for powershell, bash, cmd.exe
+#   2. Run shell init for powershell and cmd.exe
 #   3. Verify CMD AutoRun registry value
-#   4. Verify .bash_profile and PowerShell profile were modified
+#   4. Verify PowerShell profile was modified
 #
 # Output: Structured lines prefixed with OK / FAIL / INFO
 # Exit code: 0 on success, 1 on failure
@@ -67,17 +67,8 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # --- Shell init: bash ---
-
-Write-Host ""
-Write-Host "--- Initializing bash ---"
-$output = & $mmExe shell init -s bash -r $RootPrefix 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "OK: micromamba shell init -s bash"
-} else {
-    Write-Host "FAIL: micromamba shell init -s bash"
-    Write-Host "  $output"
-    $FailCount++
-}
+# Dropped: Git Bash is no longer a supported shell on Windows.
+# See docs/FUTURES.md for rationale.
 
 # --- Shell init: cmd.exe ---
 
@@ -126,22 +117,7 @@ if ($autoRun) {
 }
 
 # --- Verify .bash_profile ---
-
-Write-Host ""
-Write-Host "--- Verifying .bash_profile ---"
-$bashProfile = "$env:USERPROFILE\.bash_profile"
-if (Test-Path $bashProfile) {
-    $content = Get-Content $bashProfile -Raw
-    if ($content -match 'mamba initialize') {
-        Write-Host "OK: .bash_profile contains micromamba init block"
-    } else {
-        Write-Host "FAIL: .bash_profile exists but has no micromamba init block"
-        $FailCount++
-    }
-} else {
-    Write-Host "FAIL: .bash_profile not found at $bashProfile"
-    $FailCount++
-}
+# Dropped: Git Bash is no longer a supported shell on Windows.
 
 # --- PowerShell 7 profile ---
 # micromamba shell init -s powershell only writes to the 5.1 profile path.
@@ -237,25 +213,7 @@ foreach ($profilePath in $psProfiles) {
     }
 }
 
-# Verify .bash_profile MAMBA_EXE too
-$bashProfile = "$env:USERPROFILE\.bash_profile"
-if (Test-Path $bashProfile) {
-    $bashContent = Get-Content $bashProfile -Raw
-    if ($bashContent -match 'export MAMBA_EXE="([^"]+)"') {
-        $bashMambaExe = $Matches[1]
-        # Convert bash path to Windows path for comparison
-        $bashMambaExeWin = $bashMambaExe -replace '/', '\'
-        if ($bashMambaExeWin -match '^\\([a-zA-Z])\\') {
-            $bashMambaExeWin = "$($Matches[1]):\$($bashMambaExeWin.Substring(3))"
-        }
-        if (Test-Path $bashMambaExeWin) {
-            Write-Host "OK: .bash_profile MAMBA_EXE points to existing binary"
-        } else {
-            Write-Host "FAIL: .bash_profile MAMBA_EXE points to non-existent $bashMambaExe"
-            $FailCount++
-        }
-    }
-}
+# .bash_profile MAMBA_EXE check removed -- Git Bash no longer supported on Windows.
 
 # Verify .bat wrapper MAMBA_EXE
 $batWrapper = "$RootPrefix\condabin\micromamba.bat"
