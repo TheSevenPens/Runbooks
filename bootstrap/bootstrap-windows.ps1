@@ -210,7 +210,7 @@ public static extern IntPtr SendMessageTimeout(
         `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
         if (Get-Command claude -ErrorAction SilentlyContinue) { 'FOUND' } else { 'NOTFOUND' }
     " 2>&1
-    if ($probeOutput -match 'FOUND') {
+    if ($probeOutput.Contains('FOUND')) {
         Write-Host "Verified: a new shell can find claude on PATH." -ForegroundColor Green
     } else {
         Write-Warning "A new shell cannot find 'claude' on PATH. You may need to sign out and back in."

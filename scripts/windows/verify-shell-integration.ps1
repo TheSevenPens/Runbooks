@@ -55,7 +55,7 @@ function Test-ShellActivate {
         }
 
         $allOutput = "$stdout $stderr"
-        if ($allOutput -match 'ACTIVATE_OK') {
+        if ($allOutput.Contains('ACTIVATE_OK')) {
             Write-Host "OK: $ShellName micromamba-activate"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "OK" }
         } else {
@@ -116,7 +116,7 @@ try {
         Select-Object -ExpandProperty AutoRun
 } catch {}
 
-if ($autoRun -and $autoRun -match 'mamba_hook\.bat') {
+if ($autoRun -and $autoRun.Contains('mamba_hook.bat')) {
     try {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = "cmd.exe"
@@ -138,7 +138,7 @@ if ($autoRun -and $autoRun -match 'mamba_hook\.bat') {
             Write-Host "FAIL: CMD - timed out after ${cmdTimeout}ms"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
             $FailCount++
-        } elseif ("$stdout $stderr" -match 'ACTIVATE_OK') {
+        } elseif ("$stdout $stderr".Contains('ACTIVATE_OK')) {
             Write-Host "OK: CMD micromamba-activate"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "OK" }
         } else {

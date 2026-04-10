@@ -45,7 +45,7 @@ $cleanParts = @()
 $removedCount = 0
 
 foreach ($entry in $parts) {
-    if ($entry -match 'miniconda3') {
+    if ($entry.Contains('miniconda3')) {
         Write-Host "INFO: Removing miniconda3 entry: $entry"
         $removedCount++
         $Changed = $true

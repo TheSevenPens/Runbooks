@@ -59,7 +59,7 @@ if ($pathEntries -contains $ClaudeBin) {
 
     # Check if already referenced in the rc file (match both expanded and $HOME forms)
     $rcContent = if (Test-Path $shellRc) { Get-Content $shellRc -Raw } else { '' }
-    if ($rcContent -match '\.local/bin') {
+    if ($rcContent.Contains('.local/bin')) {
         Write-Host "SKIP: $ClaudeBin already referenced in $shellRc" -ForegroundColor Green
     } else {
         # Write without BOM (critical for bash/zsh files)

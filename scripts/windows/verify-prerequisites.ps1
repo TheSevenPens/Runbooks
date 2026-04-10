@@ -115,7 +115,7 @@ function Test-WingetPackage {
         return
     }
     $result = & $script:WingetExe list --id $WingetId --exact --accept-source-agreements 2>$null
-    if ($LASTEXITCODE -eq 0 -and $result -match $WingetId) {
+    if ($LASTEXITCODE -eq 0 -and ($result | Out-String).Contains($WingetId)) {
         Write-Host "OK: $Name (winget: $WingetId)"
     } else {
         Write-Host "FAIL: $Name not found (winget: $WingetId)"
@@ -273,8 +273,8 @@ if ($Env -ne "" -and $mmExe) {
     } else {
         # Check if micromamba lists it elsewhere
         $envList = & $mmExe env list 2>$null
-        if ($envList -match $Env) {
-            $line = $envList | Where-Object { $_ -match $Env } | Select-Object -First 1
+        if (($envList | Out-String).Contains($Env)) {
+            $line = $envList | Where-Object { "$_".Contains($Env) } | Select-Object -First 1
             Write-Host "OK: environment '$Env' found (not at default path)"
         } else {
             Write-Host "FAIL: environment '$Env' not found"

@@ -53,7 +53,7 @@ Write-Host "INFO: Using winget at $WingetExe"
 function Test-WingetInstalled {
     param([string]$WingetId)
     $result = & $script:WingetExe list --id $WingetId --exact --accept-source-agreements 2>$null
-    return ($LASTEXITCODE -eq 0 -and $result -match $WingetId)
+    return ($LASTEXITCODE -eq 0 -and ($result | Out-String).Contains($WingetId))
 }
 
 # --- Main loop ---

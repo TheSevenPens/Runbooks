@@ -58,7 +58,7 @@ Write-Host "--- System tools ---" -ForegroundColor Cyan
 $brewExe = Get-Command brew -ErrorAction SilentlyContinue
 if ($brewExe) {
     $brewVersion = & brew --version 2>$null | Select-Object -First 1
-    $brewVersion = $brewVersion -replace 'Homebrew ', ''
+    $brewVersion = $brewVersion.Replace('Homebrew ', '')
     Write-Host "OK: brew $brewVersion ($($brewExe.Source))" -ForegroundColor Green
 } else {
     Write-Host "FAIL: brew not found -- install from https://brew.sh" -ForegroundColor Red
@@ -70,7 +70,7 @@ if ($brewExe) {
 $gitExe = Get-Command git -ErrorAction SilentlyContinue
 if ($gitExe) {
     $gitVersion = & git --version 2>$null | Select-Object -First 1
-    $gitVersion = $gitVersion -replace 'git version ', ''
+    $gitVersion = $gitVersion.Replace('git version ', '')
     $gitSource = Get-GitSource -Path $gitExe.Source
 
     if ($gitSource -eq 'apple') {
@@ -124,7 +124,7 @@ foreach ($tool in $miseTools) {
     $exe = Get-Command $tool.Command -ErrorAction SilentlyContinue
     if ($exe) {
         $version = try { & $exe.Source --version 2>&1 | Select-Object -First 1 } catch { 'unknown' }
-        $source = if ($exe.Source -match 'mise') { 'mise' } else { 'other' }
+        $source = if ($exe.Source.Contains('mise')) { 'mise' } else { 'other' }
         if ($source -eq 'mise') {
             Write-Host "OK: $($tool.Name) -- $version ($($exe.Source))" -ForegroundColor Green
         } else {
