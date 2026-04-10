@@ -29,14 +29,30 @@ $Apps = @(
     @{ Id = "Microsoft.VisualStudioCode"; Name = "Visual Studio Code"; Verify = "code"; VerifyFlag = "--version" },
     @{ Id = "Google.Chrome.EXE";          Name = "Google Chrome";     Verify = $null },
     @{ Id = "Microsoft.WindowsTerminal";  Name = "Windows Terminal";  Verify = $null },
-    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version"; VerifyPaths = @("$env:ProgramFiles\PowerShell\7\pwsh.exe", "${env:ProgramFiles(x86)}\PowerShell\7\pwsh.exe") }
+    @{ Id = "Microsoft.PowerShell";       Name = "PowerShell 7";     Verify = "pwsh";  VerifyFlag = "--version"; VerifyPaths = @("$env:ProgramFiles\PowerShell\7\pwsh.exe", "${env:ProgramFiles(x86)}\PowerShell\7\pwsh.exe", "$env:LOCALAPPDATA\Microsoft\WindowsApps\pwsh.exe") }
 )
+
+# --- Resolve winget ---
+# winget is an AppX execution alias that may not be on PATH (especially in
+# Git Bash or after a PATH refresh from the registry).  Resolve it once up
+# front and call via full path so the script survives PATH changes.
+
+$WingetExe = (Get-Command winget -ErrorAction SilentlyContinue).Source
+if (-not $WingetExe) {
+    $appxDir = (Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -ErrorAction SilentlyContinue).InstallLocation
+    if ($appxDir) { $WingetExe = Join-Path $appxDir 'winget.exe' }
+}
+if (-not $WingetExe -or -not (Test-Path $WingetExe)) {
+    Write-Host "FAIL: winget not found - install App Installer from the Microsoft Store"
+    exit 1
+}
+Write-Host "INFO: Using winget at $WingetExe"
 
 # --- Helpers ---
 
 function Test-WingetInstalled {
     param([string]$WingetId)
-    $result = winget list --id $WingetId --exact --accept-source-agreements 2>$null
+    $result = & $script:WingetExe list --id $WingetId --exact --accept-source-agreements 2>$null
     return ($LASTEXITCODE -eq 0 -and $result -match $WingetId)
 }
 
@@ -86,7 +102,7 @@ foreach ($app in $Apps) {
 
     # Install
     Write-Host "INFO: Installing $name..."
-    $output = winget install -e --id $id --silent --accept-source-agreements --accept-package-agreements 2>&1
+    $output = & $WingetExe install -e --id $id --silent --accept-source-agreements --accept-package-agreements 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "OK: $name installed"
     } else {

@@ -63,10 +63,11 @@ if (Test-Path $batWrapper) {
     }
 }
 
-# Check PowerShell profiles
+# Check PowerShell profiles (use actual Documents folder, respects OneDrive redirection)
+$docsDir = [Environment]::GetFolderPath('MyDocuments')
 $psProfilesToCheck = @(
-    "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
-    "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    (Join-Path $docsDir "WindowsPowerShell\profile.ps1"),
+    (Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1")
 )
 foreach ($p in $psProfilesToCheck) {
     if (Test-Path $p) {
@@ -363,11 +364,12 @@ if (Test-Path $bashProfile) {
 
 Write-Host ""
 Write-Host "--- Step 8: Clean conda from PowerShell profiles ---"
+$docsDir2 = [Environment]::GetFolderPath('MyDocuments')
 $psProfiles = @(
-    "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
-    "$env:USERPROFILE\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1",
-    "$env:USERPROFILE\Documents\PowerShell\profile.ps1",
-    "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    (Join-Path $docsDir2 "WindowsPowerShell\profile.ps1"),
+    (Join-Path $docsDir2 "WindowsPowerShell\Microsoft.PowerShell_profile.ps1"),
+    (Join-Path $docsDir2 "PowerShell\profile.ps1"),
+    (Join-Path $docsDir2 "PowerShell\Microsoft.PowerShell_profile.ps1")
 )
 
 foreach ($profilePath in $psProfiles) {

@@ -14,6 +14,34 @@ param(
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
+# --- OneDrive Documents redirection check ---
+$docsDir = [Environment]::GetFolderPath('MyDocuments')
+$defaultDocsDir = Join-Path $env:USERPROFILE "Documents"
+if ($docsDir -ne $defaultDocsDir) {
+    Write-Host "WARN: Documents folder is redirected to $docsDir"
+    Write-Host "  PowerShell profiles, shell hooks, and other config files live there instead of $defaultDocsDir"
+    Write-Host '  Scripts that hardcode $env:USERPROFILE\Documents will look in the wrong place'
+}
+
+# --- Resolve winget ---
+# winget is an AppX execution alias that may not be on PATH (especially in
+# Git Bash or after a PATH refresh from the registry).  Resolve it once up
+# front so Test-WingetPackage can call it by full path.
+
+$WingetExe = (Get-Command winget -ErrorAction SilentlyContinue).Source
+if (-not $WingetExe) {
+    $appxDir = (Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -ErrorAction SilentlyContinue).InstallLocation
+    if ($appxDir) {
+        $candidate = Join-Path $appxDir 'winget.exe'
+        if (Test-Path $candidate) { $WingetExe = $candidate }
+    }
+}
+if ($WingetExe) {
+    Write-Host "INFO: Using winget at $WingetExe"
+} else {
+    Write-Host "WARN: winget not found - GUI-app checks will be skipped"
+}
+
 # --- Helpers ---
 
 function Test-CliTool {
@@ -50,7 +78,11 @@ function Test-WingetPackage {
         [string]$WingetId
     )
 
-    $result = winget list --id $WingetId --exact --accept-source-agreements 2>$null
+    if (-not $script:WingetExe) {
+        Write-Host "SKIP: $Name - winget not available"
+        return
+    }
+    $result = & $script:WingetExe list --id $WingetId --exact --accept-source-agreements 2>$null
     if ($LASTEXITCODE -eq 0 -and $result -match $WingetId) {
         Write-Host "OK: $Name (winget: $WingetId)"
     } else {
@@ -91,9 +123,10 @@ if ($mmExe) {
 $mambaExeRefs = @{}
 
 # PowerShell profiles
+$docsDir = [Environment]::GetFolderPath('MyDocuments')
 $psProfilesToScan = @(
-    @{ Name = "PS 5.1 profile"; Path = "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1" },
-    @{ Name = "PS 7 profile";   Path = "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1" }
+    @{ Name = "PS 5.1 profile"; Path = Join-Path $docsDir "WindowsPowerShell\profile.ps1" },
+    @{ Name = "PS 7 profile";   Path = Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1" }
 )
 foreach ($entry in $psProfilesToScan) {
     if (Test-Path $entry.Path) {

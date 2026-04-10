@@ -88,7 +88,70 @@ oh-my-posh font install JetBrainsMono
 | Execution policy blocks scripts | `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` |
 | `gh` auth needed after install | `gh` is installed inside the `node1` micromamba env (not system-wide). Activate first: `micromamba activate node1 && gh auth login` |
 | Fresh PS7 install left PS7 profile missing micromamba hook | Fixed: `install-apps.ps1` now auto-runs `micromamba-shell-init.ps1` after installing PS7 (if micromamba is present), and `verify-shell-integration.ps1` now checks `$LASTEXITCODE` + `$env:CONDA_PREFIX` so a missing hook can no longer pass silently. |
+| `winget` not recognized when running scripts from Git Bash | winget is an AppX execution alias that isn't in the Machine/User PATH registry. Scripts refresh PATH from the registry (losing the AppX alias). Fixed: `install-apps.ps1` and `verify-prerequisites.ps1` now resolve winget via `Get-AppxPackage` at startup and call it by full path. |
+| `install-apps.ps1` PATH refresh drops winget mid-run | After installing an app with a CLI verifier, the script refreshes `$env:Path` from the registry (lines 102-104). This overwrites the session PATH and drops the AppX winget alias. The first few apps install fine, then the rest fail. Fixed by resolving winget to its full path once at startup and using `$WingetExe` everywhere. |
+| OneDrive Documents redirection breaks PowerShell profile lookups | When OneDrive redirects `Documents` to `~\OneDrive\Documents`, scripts that hardcode `$env:USERPROFILE\Documents\...` for PS profile paths look in the wrong place. Affected: `micromamba-shell-init.ps1`, `verify-prerequisites.ps1`, `remove-conda.ps1`. Fixed: all now use `[Environment]::GetFolderPath('MyDocuments')`. `verify-prerequisites.ps1` also prints a WARN when redirection is detected. |
+| PATH registry type `REG_SZ` on fresh Windows machines | The micromamba installer (or Windows itself) may set `HKCU\Environment\Path` to `REG_SZ` instead of `REG_EXPAND_SZ`. CMD silently ignores user PATH entries when the type is wrong. Fixed by `fix-path-registry.ps1` (run during Section 8). |
+| PowerShell 7 installs as MSIX on ARM, `pwsh` not at standard path | `winget install Microsoft.PowerShell` on ARM64 installs the MSIX package, placing `pwsh.exe` at `AppData\Local\Microsoft\WindowsApps\` instead of `Program Files\PowerShell\7\`. Fixed: `install-apps.ps1` now includes the WindowsApps path in `VerifyPaths`. |
+| Em-dash characters in PS scripts cause parse errors | PowerShell 5.1 cannot parse UTF-8 files containing non-ASCII characters (like `---`) unless the file has a BOM. Scripts must use only ASCII characters. |
+| Micromamba installer downloads x86-64 binary on ARM64 | The official installer at `micro.mamba.pm/install.ps1` downloads `micromamba-win-64` (x86-64), not a native ARM64 build. It works under Windows x86-64 emulation but is not optimal. No ARM64 build is currently published upstream. |
 | Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+
+---
+
+## First-Run Discoveries (Windows on ARM, 2026-04-09)
+
+This section documents issues found during the first run of the runbook on a Windows 11 ARM64 (Snapdragon) machine. All issues have been fixed in the scripts, and the relevant Known Issues entries above describe the fixes. This section provides the narrative for anyone trying to understand *what happened and why*.
+
+### 1. winget exists but isn't callable
+
+**Symptom:** `verify-prerequisites.ps1` and `install-apps.ps1` both failed with `winget: The term 'winget' is not recognized`. The Desktop App Installer package was installed (v1.28.220) and `winget.exe` existed at `C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_...\winget.exe`.
+
+**Root cause:** winget is exposed via an AppX execution alias, not a standard PATH entry. The alias works in interactive terminals but not when scripts refresh `$env:Path` from the registry (which only contains Machine + User PATH, not AppX aliases). The `install-apps.ps1` script refreshed PATH after each CLI-verifiable install (to find the newly installed command), and this refresh *also* lost winget, causing the script to partially succeed (Git skipped, GitHub Desktop and VS Code installed) then fail for every remaining app.
+
+**Fix:** Both scripts now resolve winget at startup via `Get-AppxPackage` and store the full path in `$WingetExe`.
+
+### 2. OneDrive Documents folder redirection
+
+**Symptom:** `micromamba-shell-init.ps1` reported `WARN: Could not find mamba init block in $ps5Profile to copy` even though the profile existed and contained the correct init block. `verify-prerequisites.ps1` couldn't find PS profiles for MAMBA_EXE consistency checks.
+
+**Root cause:** OneDrive's "Known Folder Move" feature redirects `~\Documents` to `~\OneDrive\Documents`. The Windows shell folder registry key (`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\Personal`) points to the OneDrive location. PowerShell's `$PROFILE` correctly follows this redirection, and `micromamba shell init -s powershell` uses `$PROFILE` internally so it wrote the init block to the correct location. But our scripts hardcoded `$env:USERPROFILE\Documents\WindowsPowerShell\...` and `$env:USERPROFILE\Documents\PowerShell\...`, which don't exist when OneDrive redirects Documents.
+
+**Impact:** Three scripts were affected: `micromamba-shell-init.ps1` (PS7 profile sync and MAMBA_EXE verification), `verify-prerequisites.ps1` (MAMBA_EXE consistency checks), and `remove-conda.ps1` (conda profile cleanup). In all cases the scripts silently looked in the wrong directory.
+
+**Fix:** All scripts now use `[Environment]::GetFolderPath('MyDocuments')` to resolve the actual Documents path. `verify-prerequisites.ps1` prints a warning when OneDrive redirection is detected.
+
+### 3. PATH registry type was REG_SZ
+
+**Symptom:** `fix-path-registry.ps1` found `HKCU\Environment\Path` was type `String` (`REG_SZ`) instead of `ExpandString` (`REG_EXPAND_SZ`).
+
+**Root cause:** The micromamba installer adds itself to the user PATH. On this fresh machine, this was the first modification to the user PATH, and the installer (or Windows default) set the type to `REG_SZ`. CMD ignores user PATH entries with the wrong type.
+
+**Fix:** `fix-path-registry.ps1` detected and corrected this automatically.
+
+### 4. PowerShell 7 installed as MSIX (not MSI)
+
+**Symptom:** After `winget install Microsoft.PowerShell`, `pwsh` was not found on PATH and not at the expected `C:\Program Files\PowerShell\7\pwsh.exe`.
+
+**Root cause:** On ARM64, winget installs the MSIX package of PowerShell 7, which places `pwsh.exe` at `AppData\Local\Microsoft\WindowsApps\pwsh.exe` via an AppX execution alias. The `install-apps.ps1` script only checked `Program Files\PowerShell\7\` as a fallback path.
+
+**Fix:** Added `$env:LOCALAPPDATA\Microsoft\WindowsApps\pwsh.exe` to the `VerifyPaths` array.
+
+### 5. Micromamba is x86-64 under emulation
+
+**Symptom:** No error, but `micromamba.exe` is an x86-64 binary running under Windows ARM64 emulation.
+
+**Root cause:** The official micromamba installer (`micro.mamba.pm/install.ps1`) downloads `micromamba-win-64` regardless of architecture. There is no `micromamba-win-arm64` build published. The conda packages it installs *are* correct architecture (conda-forge has `win-64` packages that run under emulation, and some native ARM packages are becoming available).
+
+**Impact:** Performance overhead from x86-64 emulation during env creation and package operations. Functionally correct.
+
+### 6. Em-dash characters cause PowerShell parse errors
+
+**Symptom:** After editing scripts, PowerShell 5.1 threw parse errors on unrelated lines (`Unexpected token`, `Missing type name after '['`).
+
+**Root cause:** The Edit tool wrote UTF-8 em-dash characters (`---`, 3 bytes: `E2 80 94`) into `.ps1` files. PowerShell 5.1's parser cannot handle multi-byte UTF-8 without a BOM --- it misinterprets byte boundaries and produces cascading parse errors on lines *after* the offending character. The error messages point to valid regex patterns like `[^"]+` which are perfectly fine --- PS5.1 is just confused about byte alignment.
+
+**Lesson:** All `.ps1` files in this repo must use ASCII-only characters. Use `-` (hyphen) instead of `---` (em-dash).
 
 ---
 

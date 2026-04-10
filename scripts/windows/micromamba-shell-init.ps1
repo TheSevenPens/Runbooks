@@ -155,9 +155,11 @@ if (-not $pwshExe -and (Test-Path "$env:ProgramFiles\PowerShell\7\pwsh.exe")) {
     $pwshExe = Get-Item "$env:ProgramFiles\PowerShell\7\pwsh.exe"
 }
 if ($pwshExe) {
-    $ps5Profile = "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1"
-    $ps7Profile = "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
-    $ps7Dir     = "$env:USERPROFILE\Documents\PowerShell"
+    # Use the actual Documents folder (respects OneDrive redirection)
+    $docsDir    = [Environment]::GetFolderPath('MyDocuments')
+    $ps5Profile = Join-Path $docsDir "WindowsPowerShell\profile.ps1"
+    $ps7Profile = Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1"
+    $ps7Dir     = Join-Path $docsDir "PowerShell"
 
     # Extract the mamba init block from the 5.1 profile (freshly written by shell init above)
     $initBlock = $null
@@ -202,9 +204,10 @@ if ($pwshExe) {
 
 Write-Host ""
 Write-Host "--- Verifying MAMBA_EXE paths in profiles ---"
+$docsDir2 = [Environment]::GetFolderPath('MyDocuments')
 $psProfiles = @(
-    "$env:USERPROFILE\Documents\WindowsPowerShell\profile.ps1",
-    "$env:USERPROFILE\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+    (Join-Path $docsDir2 "WindowsPowerShell\profile.ps1"),
+    (Join-Path $docsDir2 "PowerShell\Microsoft.PowerShell_profile.ps1")
 )
 
 foreach ($profilePath in $psProfiles) {
