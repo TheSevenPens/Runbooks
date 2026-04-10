@@ -85,11 +85,9 @@ function REGEX_FindFirstNonBlankLine {
     #>
     param([string]$Text)
 
-    # Pattern: \S matches any character that is NOT whitespace (space, tab, newline, etc.)
-    # We use it as a simple "does this line have visible content?" test.
     $lines = $Text -split "`n"
     foreach ($line in $lines) {
-        if ($line -match '\S') {
+        if ($line.Trim() -ne '') {
             return $line
         }
     }
@@ -122,12 +120,10 @@ function REGEX_TestContainsAnyWord {
         [string[]]$Words
     )
 
-    # Build alternation pattern: escape each word, join with '|'
-    # Example: @('failed', 'error') becomes 'failed|error'
-    # [regex]::Escape() ensures special characters like . or $ in words
-    # are treated as literal characters, not regex operators.
-    $pattern = ($Words | ForEach-Object { [regex]::Escape($_) }) -join '|'
-    return ($Text -match $pattern)
+    foreach ($word in $Words) {
+        if ($Text.Contains($word)) { return $true }
+    }
+    return $false
 }
 
 function REGEX_TestLooksLikePowerShellScript {
