@@ -248,6 +248,19 @@ $content = $content -replace [regex]::Escape($oldPath), $newPath
 
 Even with `[regex]::Escape()` on the pattern, the replacement string is still interpreted for regex backreferences (`$1`, `$&`, etc.). Windows paths containing `$` (e.g., in usernames) will silently corrupt the replacement.
 
+### Regex avoidance
+
+Avoid regex in scripts. Most string checks (substring search, starts-with, splitting on a delimiter) are clearer and safer with `.Contains()`, `.StartsWith()`, `.IndexOf()`, `.Trim()`, and `-split`.
+
+If regex is genuinely needed (capture groups, character classes, anchors), isolate it in a `REGEX_` prefixed function in `scripts/shared/regex-helpers.ps1`. The function must document:
+- What the pattern matches (with examples)
+- Input and output types
+- Why string operations are not sufficient
+
+Functions that use only string operations use the `STRINGOP_` prefix. Both live in the same shared file and are dot-sourced by calling scripts.
+
+Currently the shared helpers file contains zero regex -- all former regex uses were replaced with string operations during the 2026-04-09 cleanup. If a future script adds a `REGEX_` function, it should be reviewed for whether the regex is truly necessary.
+
 ### Exit code checking on external commands
 
 Always check `$LASTEXITCODE` after calling external tools before parsing their output. Empty output from a failed command can silently pass validation:
