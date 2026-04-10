@@ -319,6 +319,53 @@ New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and 
 3. Use the mise runbook on the next fresh machine. See if it's actually better in practice.
 4. If yes, retire `conda-env-runbook.md` and move the conda scripts into `scripts/archive/`. If no, walk away — no harm done.
 
+### Drop Git Bash as a supported shell on Windows
+
+**The observation.** Git Bash (MSYS2) is the source of a disproportionate share of issues on Windows. Every tool that interacts with PATH, writes config files, or spawns subshells has to navigate the impedance mismatch between Unix-style paths (`/c/Users/...` with `:` separators) and Windows-style paths (`C:\Users\...` with `;` separators). Tools get this wrong regularly, and when they do, the failures are confusing and hard to diagnose.
+
+**Problems caused by Git Bash during the 2026-04-09 ARM64 run:**
+
+1. **`mise activate bash` destroys PATH.** mise's hook outputs Windows-style semicolon-separated paths, which replaces bash's colon-separated PATH. After activation, *every* command fails -- including basic Unix tools like `ls`, `tr`, and `head`. The workaround is to use shims instead of activation, but this loses mise's auto-switching feature.
+
+2. **`micromamba shell init -s cmd.exe` mangles paths when run from Git Bash.** micromamba treats the `-r` root prefix as a relative path in the MSYS2 environment, producing incorrect `AutoRun` registry values. The workaround is to always run it from PowerShell.
+
+3. **PowerShell's `-Encoding UTF8` adds BOM to `.bash_profile`.** Any time a PowerShell script writes a file that bash reads, it must avoid `-Encoding UTF8` (which adds a BOM on PS5.1) and use `[System.IO.File]::WriteAllText()` instead. This is an ongoing trap -- every new script that touches `.bash_profile` has to remember this.
+
+4. **Git Bash subshells lose commands.** Non-interactive bash subshells spawned from Claude Code's environment have a broken PATH that's missing basic Git Bash utilities. The `ioctl` warnings and `command not found` errors on standard tools make testing unreliable.
+
+**What we'd gain by dropping Git Bash support:**
+
+- Remove `.bash_profile` management from all Windows scripts and runbooks
+- Remove `micromamba shell init -s bash` / `mise activate bash` from the init flow
+- Remove Git Bash from `verify-shell-integration.ps1` test matrix
+- Eliminate the entire BOM-in-bash-files risk (no bash config files to write on Windows)
+- Eliminate the path format translation problem
+- Simplify encoding rules (ASCII-only in `.ps1` is the only rule left; no cross-shell encoding concerns)
+
+**What we'd keep:**
+
+- **Git for Windows** stays installed (provides `git` CLI, Git Credential Manager)
+- **Git Bash itself still exists** for users who want it -- we just stop configuring/testing it
+- PowerShell 7 + CMD cover all automation needs
+- Any Unix shell needs (SSH, WSL) use their own bash, not Git Bash
+
+**Supported shell matrix after this change:**
+
+| Shell | Windows | macOS |
+|-------|---------|-------|
+| PowerShell 7 | Primary | Optional (`brew install powershell`) |
+| PowerShell 5.1 | Supported (ships with Windows) | N/A |
+| CMD | Supported | N/A |
+| Git Bash | **Dropped** | N/A |
+| zsh | N/A | Primary |
+| bash | N/A | Supported (via `~/.bash_profile`) |
+
+**Risk:** Users who prefer Git Bash as their daily shell would find that mise/micromamba tools aren't configured for it. This is mitigable -- the tools still work if the user manually adds shims to PATH. We just stop doing it for them and stop testing it.
+
+**Recommendation:** Drop Git Bash. The complexity cost of supporting it (BOM rules, path format translation, broken subshells, per-tool workarounds) exceeds the value. PowerShell 7 is the natural Windows shell for this workflow.
+
+**When to do this:** Next time the Windows runbook is revised for a fresh machine setup. It's a cleanup task, not urgent.
+
 ### Runbook diffing between machines
 
 When setting up a second machine, it would be useful to compare what's installed on the new machine vs. an already-configured reference machine. The `verify-prerequisites` script output is structured enough to diff, but there's no tooling to capture a baseline and compare against it.
