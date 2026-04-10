@@ -195,6 +195,27 @@ public static extern IntPtr SendMessageTimeout(
     if (-not ($env:Path -split ';' | Where-Object { $_ -ieq $ClaudeBin })) {
         $env:Path = "$ClaudeBin;$env:Path"
     }
+
+    # Verify: re-read the registry PATH and confirm the Claude bin dir is there
+    $verifyPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (-not $verifyPath) { $verifyPath = '' }
+    $verifyEntries = $verifyPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+    if (-not ($verifyEntries | Where-Object { $_ -ieq $ClaudeBin })) {
+        Write-Warning "$ClaudeBin is NOT on the user PATH registry after update. claude may not be found in new terminals."
+        $FailCount++
+    }
+
+    # Verify: spawn a fresh powershell to confirm claude.exe is reachable
+    $probeOutput = & powershell.exe -NoProfile -Command "
+        `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
+        if (Get-Command claude -ErrorAction SilentlyContinue) { 'FOUND' } else { 'NOTFOUND' }
+    " 2>&1
+    if ($probeOutput -match 'FOUND') {
+        Write-Host "Verified: a new shell can find claude on PATH." -ForegroundColor Green
+    } else {
+        Write-Warning "A new shell cannot find 'claude' on PATH. You may need to sign out and back in."
+        $FailCount++
+    }
 }
 
 # ---------------------------------------------------------------------------
