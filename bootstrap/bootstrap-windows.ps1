@@ -206,7 +206,24 @@ if ($FailCount -gt 0) {
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Cyan
     Write-Host "  cd $CloneDir" -ForegroundColor White
-    Write-Host "  claude" -ForegroundColor White
+
+    # Show the right claude command depending on whether it's on PATH
+    if (Get-Command claude -ErrorAction SilentlyContinue) {
+        $claudeCmd = 'claude'
+    } elseif (Test-Path $ClaudeExe) {
+        $claudeCmd = $ClaudeExe
+        Write-Host ""
+        Write-Host "  Note: 'claude' is not on PATH yet. Using the full path below." -ForegroundColor Yellow
+        Write-Host "  To fix permanently, add $ClaudeBin to your user PATH via:" -ForegroundColor Yellow
+        Write-Host "    System Properties > Environment Variables > User PATH > New > $ClaudeBin" -ForegroundColor Yellow
+    } else {
+        Write-Host "  claude" -ForegroundColor White
+        Write-Host ""
+        Write-Host "Then tell Claude: ""Follow the setup runbook at setup-runbook-windows.md""" -ForegroundColor White
+        return
+    }
+
+    Write-Host "  $claudeCmd" -ForegroundColor White
     Write-Host ""
     Write-Host "Then tell Claude: ""Follow the setup runbook at setup-runbook-windows.md""" -ForegroundColor White
     return
