@@ -101,7 +101,7 @@ if ($miseExe) {
 
     # Check mise activation
     $miseDoctor = & mise doctor 2>&1
-    $activated = REGEX_TestMiseActivated -DoctorOutput $miseDoctor
+    $activated = STRINGOP_TestMiseActivated -DoctorOutput $miseDoctor
     if ($activated) {
         Write-Host "OK: mise is activated" -ForegroundColor Green
     } else {

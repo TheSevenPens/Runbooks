@@ -42,7 +42,7 @@ function REGEX_ParseBrewfileLine {
     return $null
 }
 
-function REGEX_TestMiseActivated {
+function STRINGOP_TestMiseActivated {
     <#
     .SYNOPSIS
         Check whether mise reports itself as activated.
@@ -55,16 +55,16 @@ function REGEX_TestMiseActivated {
         $true if mise is activated, $false otherwise.
     .EXAMPLE
         $output = & mise doctor 2>&1
-        REGEX_TestMiseActivated -DoctorOutput $output
+        STRINGOP_TestMiseActivated -DoctorOutput $output
     #>
     param([string[]]$DoctorOutput)
 
-    # Pattern: 'activated:' followed by optional whitespace and 'yes'
-    #   activated:  -- literal text
-    #   \s*         -- zero or more whitespace characters
-    #   yes         -- literal text
-    $joined = $DoctorOutput -join "`n"
-    return ($joined -match 'activated:\s*yes')
+    foreach ($line in $DoctorOutput) {
+        if ($line.Contains('activated:') -and $line.Contains('yes')) {
+            return $true
+        }
+    }
+    return $false
 }
 
 function STRINGOP_FindFirstNonBlankLine {
