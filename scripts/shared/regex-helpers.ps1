@@ -126,7 +126,7 @@ function STRINGOP_TestContainsAnyWord {
     return $false
 }
 
-function REGEX_TestLooksLikePowerShellScript {
+function STRINGOP_TestLooksLikePowerShellScript {
     <#
     .SYNOPSIS
         Sanity-check that downloaded content looks like a PowerShell script.
@@ -140,16 +140,11 @@ function REGEX_TestLooksLikePowerShellScript {
         $true if the content looks like a PowerShell script, $false otherwise.
     .EXAMPLE
         $script = Invoke-RestMethod https://claude.ai/install.ps1
-        if (-not (REGEX_TestLooksLikePowerShellScript $script)) {
+        if (-not (STRINGOP_TestLooksLikePowerShellScript $script)) {
             Write-Error "Not a valid install script"
         }
     #>
     param([string]$Content)
 
-    # Pattern: alternation of keywords expected in the installer script
-    #   param     -- PowerShell param() block
-    #   function  -- PowerShell function definition
-    #   Install   -- install-related logic
-    #   claude    -- the tool being installed
-    return ($Content -match 'param|function|Install|claude')
+    return (STRINGOP_TestContainsAnyWord -Text $Content -Words @('param', 'function', 'Install', 'claude'))
 }

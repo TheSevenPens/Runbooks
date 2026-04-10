@@ -24,11 +24,18 @@ $ClaudeBin = Join-Path $HOME '.local\bin'
 $ClaudeExe = Join-Path $ClaudeBin 'claude.exe'
 $FailCount = 0
 
-# Inline copy of REGEX_TestLooksLikePowerShellScript from scripts/shared/regex-helpers.ps1
+# Inline copies from scripts/shared/regex-helpers.ps1
 # (bootstrap runs before the repo is cloned, so it cannot dot-source the shared file)
-function REGEX_TestLooksLikePowerShellScript {
+function STRINGOP_TestContainsAnyWord {
+    param([string]$Text, [string[]]$Words)
+    foreach ($word in $Words) {
+        if ($Text.Contains($word)) { return $true }
+    }
+    return $false
+}
+function STRINGOP_TestLooksLikePowerShellScript {
     param([string]$Content)
-    return ($Content -match 'param|function|Install|claude')
+    return (STRINGOP_TestContainsAnyWord -Text $Content -Words @('param', 'function', 'Install', 'claude'))
 }
 
 function Repair-PathEntries {
@@ -138,7 +145,7 @@ if (Test-Path $ClaudeExe) {
         if ([string]::IsNullOrWhiteSpace($installScript)) {
             Write-Error "Downloaded install script is empty -- network issue or URL may have changed"
             $FailCount++
-        } elseif (-not (REGEX_TestLooksLikePowerShellScript -Content $installScript)) {
+        } elseif (-not (STRINGOP_TestLooksLikePowerShellScript -Content $installScript)) {
             Write-Error "Downloaded content does not look like a PowerShell install script -- URL may have changed"
             $FailCount++
         } else {

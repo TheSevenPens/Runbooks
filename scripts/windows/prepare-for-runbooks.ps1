@@ -68,7 +68,7 @@ if (Test-Path $ClaudeExe) {
             exit 1
         }
         # Basic sanity check: the script should contain PowerShell-like content
-        if (-not (REGEX_TestLooksLikePowerShellScript -Content $installScript)) {
+        if (-not (STRINGOP_TestLooksLikePowerShellScript -Content $installScript)) {
             Write-Error "Downloaded content does not look like a PowerShell install script -- URL may have changed"
             exit 1
         }
