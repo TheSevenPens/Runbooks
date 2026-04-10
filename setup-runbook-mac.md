@@ -2,9 +2,11 @@
 
 > **How to use this with Claude Code:** Open Claude Code in your terminal, point it at this file, and say: *"Follow the setup runbook at setup-runbook-mac.md. Walk me through each section, automate what you can, and tell me when I need to do something manually. Be aware we may be using a machine where some components are already installed. And may be installed through an alternative means than described in the runbook. We need to decide how to handle them."*
 
-> 📝 **Quick check:** Run `scripts/mac/verify-prerequisites.sh` to see what's already installed before starting:
+> 📝 **Prerequisites:** PowerShell 7 must be installed (`brew install powershell`). The bootstrap script (`bootstrap/bootstrap-mac.sh`) handles this automatically on fresh machines.
+
+> 📝 **Quick check:** Run `scripts/mac/verify-prerequisites.ps1` to see what's already installed before starting:
 > ```bash
-> bash scripts/mac/verify-prerequisites.sh
+> pwsh -NoProfile -File scripts/mac/verify-prerequisites.ps1
 > ```
 
 ---
@@ -48,12 +50,12 @@ Installs Git, GitHub Desktop, VS Code, Chrome, and GitHub CLI declaratively from
 ### Run the Brewfile bundle (standard path)
 
 ```bash
-bash scripts/mac/bundle-install.sh
+pwsh -NoProfile -File scripts/mac/bundle-install.ps1
 ```
 
-This reads `apps/Brewfile` and installs all packages via `brew bundle`. The Brewfile is the canonical source of truth for what gets installed on a machine — prefer this over the per-app script.
+This reads `apps/Brewfile` and installs all packages via `brew bundle`. The Brewfile is the canonical source of truth for what gets installed on a machine -- prefer this over the per-app script.
 
-> 📝 **Alternative: per-app script.** `scripts/mac/install-apps.sh` loops app-by-app with structured per-app status output. Useful for debugging or when you want to know exactly which app failed. Otherwise use the bundle.
+> 📝 **Alternative: per-app script.** `scripts/mac/install-apps.ps1` loops app-by-app with structured per-app status output. Useful for debugging or when you want to know exactly which app failed. Otherwise use the bundle.
 
 > ⚠️ **Manual step:** After the script completes, open a new terminal so PATH changes take effect.
 
@@ -150,9 +152,11 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 
 ---
 
-## Section 8 — Micromamba & Environments
+## Section 8 — Tool Versions (mise)
 
-> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing the environment manager, shell configuration, and creating environments. That runbook covers both platforms — on Windows it installs **micromamba**, on macOS it installs **miniconda** (because of a libmamba codesign bug on macOS 26; see the platform policy table at the top of that runbook).
+> 📘 **See [mise-env-runbook.md](mise-env-runbook.md)** for installing mise and setting up Node.js, Python, and GitHub CLI. mise is the recommended tool version manager for both platforms.
+>
+> 📝 **Legacy alternative:** [conda-env-runbook.md](conda-env-runbook.md) is still available for conda/micromamba-based setups but is no longer the default path.
 
 ---
 
@@ -174,8 +178,7 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 | `git --version` shows Apple Git after brew install | Open a new terminal — Homebrew's `/opt/homebrew/bin` should take PATH precedence over `/usr/bin` |
 | `code` command not found after VS Code install | Open VS Code → `Cmd+Shift+P` → "Shell Command: Install 'code' command in PATH" |
 | `brew bundle` fails adopting an already-installed cask (Chrome/VS Code/GitHub Desktop) | Pre-existing app bundles cannot be adopted: Chrome/VS Code fail on `sudo chmod` (no TTY for password), GitHub Desktop fails on an xattr write (SIP). Delete the pre-existing app with `sudo rm -rf /Applications/<App>.app` and re-run `bundle-install.sh`. |
-| Miniconda / env issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
-| Why is macOS using miniconda instead of micromamba? | libmamba codesign bug on macOS 26. Root cause and minimal repro in [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15. The setup runbook already removes micromamba if present — see [conda-env-runbook.md](conda-env-runbook.md) Section 0. |
+| mise / tool version issues | See [mise-env-runbook.md](mise-env-runbook.md) -- Notes & Known Issues |
 
 ---
 
@@ -185,11 +188,12 @@ PROMPT='%F{blue}%~%f%F{green}${vcs_info_msg_0_}%f %# '
 
 - [ ] Homebrew installed
 - [ ] Homebrew on PATH verified (`brew --version`)
-- [ ] Dev tools installed via `install-apps.sh` (Git, GitHub Desktop, VS Code, Chrome, gh)
+- [ ] PowerShell 7 installed (`pwsh --version`)
+- [ ] Dev tools installed via `bundle-install.ps1` (Git, GitHub Desktop, VS Code, Chrome, gh)
 - [ ] Git verified (`git --version`, correct path — not Apple Git)
 - [ ] VS Code verified (`code --version`)
 - [ ] iTerm2 installed (if chosen)
 - [ ] Shell configured (zsh)
-- [ ] Miniconda setup complete (see [conda-env-runbook.md](conda-env-runbook.md))
+- [ ] mise setup complete (see [mise-env-runbook.md](mise-env-runbook.md))
 - [ ] GitHub Desktop signed in (manual)
 - [ ] Chrome signed in (manual)

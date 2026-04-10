@@ -18,7 +18,13 @@ This installs Git and Claude Code, then clones the repo to `~/Documents/GitHub/R
 
 ### macOS
 
-*Coming soon.*
+Open Terminal and run:
+
+```bash
+bash -c "$(curl -fsSL <GIST_URL_TBD>)"
+```
+
+This installs Homebrew, PowerShell 7, Claude Code, and clones the repo to `~/Documents/GitHub/Runbooks`.
 
 ## After bootstrap
 

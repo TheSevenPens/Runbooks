@@ -9,12 +9,15 @@ A collection of runbooks for setting up development machines from scratch. The r
 ```
 setup-runbook-windows.md             — Windows machine setup (apps, tools, shell config)
 setup-runbook-mac.md                 — macOS machine setup (apps, tools, shell config)
-conda-env-runbook.md                 — Shared environment runbook: micromamba on Windows, miniconda on macOS
-macos_micromamba_debug_runbook.md    — Root-cause writeup and reproducer for the macOS libmamba codesign bug
+mise-env-runbook.md                  — Tool version management via mise (cross-platform)
+conda-env-runbook.md                 — Legacy environment runbook (conda/micromamba)
+macos_micromamba_debug_runbook.md    — Root-cause writeup for the macOS libmamba codesign bug
 docs/FUTURES.md                      — Planned improvements and architectural decisions
 apps/                                — Declarative app specs (winget JSON, Brewfile)
+bootstrap/                           — One-liner bootstrap scripts for fresh machines
 scripts/windows/                     — PowerShell automation scripts for Windows setup
-scripts/mac/                         — Shell automation scripts for macOS setup
+scripts/mac/                         — PowerShell 7 automation scripts for macOS setup
+scripts/archive/                     — Retired bash scripts (pre-PowerShell migration)
 ```
 
 ## How to run a runbook

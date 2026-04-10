@@ -173,30 +173,13 @@ See `docs/HISTORY.md` for the full list of changes across 9 scripts.
 
 ## Ideas to explore
 
-### PowerShell 7 as cross-platform scripting language
+### ~~PowerShell 7 as cross-platform scripting language~~ -- Done (2026-04-09)
 
-PowerShell 7 runs on both Windows and macOS (`brew install powershell`). The idea is not necessarily that identical `.ps1` files run on both platforms, but that both platforms use the same language, so there's one set of patterns to learn, one way to handle errors, and one style of script to maintain.
+All macOS bash scripts rewritten as `.ps1` files in `scripts/mac/`. Both platforms now use PowerShell with the same conventions: `#Requires` version header, `$ErrorActionPreference`, `$FailCount` tracking, `OK/SKIP/FAIL/WARN/INFO` structured output with `Write-Host` colors.
 
-**What this would look like:**
-- All macOS `.sh` scripts rewritten as `.ps1`
-- Shared PowerShell module with common helpers (structured output, idempotency checks, version detection)
-- `param()` blocks with typed parameters instead of `getopts` / positional args
-- `try/catch` error handling instead of `set -euo pipefail` + exit code checks
-- Object pipeline for passing structured data between functions instead of text parsing
+The bootstrap problem was solved by keeping `bootstrap/bootstrap-mac.sh` as the ONE bash script -- it installs Homebrew + PowerShell 7 + Claude Code + clones the repo. Everything after that runs under `pwsh`.
 
-**Benefits:**
-- The Windows scripts are already more mature and battle-tested — their patterns (canonical path fallbacks, registry handling, verify-after-install) would transfer directly
-- PowerShell's `param()` and type system make scripts more self-documenting than bash
-- A shared helper module could enforce conventions (e.g., `Write-Status "OK" "git installed"`) rather than each script reimplementing prefix formatting
-
-**Practical concerns to work through:**
-- **Bootstrap problem.** `prepare-for-runbooks` must run before PowerShell 7 exists on a fresh Mac. At minimum, one bash bootstrap script is needed to install Homebrew + PowerShell 7, then hand off to `.ps1` for everything else
-- **Shell hook testing.** `verify-shell-integration` tests that zsh/bash hooks work. This can be done from PowerShell (spawn `zsh -i -c "..."`), but it's an extra layer of indirection
-- **macOS-native tooling.** `brew`, `defaults`, `launchctl`, dotfile editing are more natural in bash — PowerShell scripts would wrap these in `& bash -c "..."` calls
-- **pwsh startup time.** ~500ms+ cold start vs near-instant for bash, which adds up for quick verification scripts
-- **Contributor expectations.** PowerShell on macOS is unusual — anyone else touching these scripts would need to know it
-
-**Migration path:** Start with scripts that have the most to gain from PowerShell's features (structured data handling, multi-step verification) and leave simple wrappers as bash. The bootstrap script (`prepare-for-runbooks.sh`) would always remain bash.
+Original bash scripts moved to `scripts/archive/` for reference.
 
 ### Script contract standardization
 
