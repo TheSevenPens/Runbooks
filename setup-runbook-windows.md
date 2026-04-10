@@ -163,7 +163,8 @@ oh-my-posh font install JetBrainsMono
 | `install-apps.ps1` PATH refresh drops winget mid-run | After installing an app with a CLI verifier, the script refreshes `$env:Path` from the registry (lines 102-104). This overwrites the session PATH and drops the AppX winget alias. The first few apps install fine, then the rest fail. Fixed by resolving winget to its full path once at startup and using `$WingetExe` everywhere. |
 | OneDrive Documents redirection breaks PowerShell profile lookups | When OneDrive redirects `Documents` to `~\OneDrive\Documents`, scripts that hardcode `$env:USERPROFILE\Documents\...` for PS profile paths look in the wrong place. Affected: `micromamba-shell-init.ps1`, `verify-prerequisites.ps1`, `remove-conda.ps1`. Fixed: all now use `[Environment]::GetFolderPath('MyDocuments')`. `verify-prerequisites.ps1` also prints a WARN when redirection is detected. |
 | PATH registry type `REG_SZ` on fresh Windows machines | The micromamba installer (or Windows itself) may set `HKCU\Environment\Path` to `REG_SZ` instead of `REG_EXPAND_SZ`. CMD silently ignores user PATH entries when the type is wrong. Fixed by `fix-path-registry.ps1` (run during Section 8). |
-| Missing semicolons in PATH after micromamba install | The micromamba installer may concatenate PATH entries without a semicolon separator (e.g. `...WindowsAppsC:\Users\...`). This silently merges two entries into one invalid path. Fixed: `fix-path-registry.ps1` now detects drive-letter patterns mid-entry and splits them apart (step 2b). |
+| Missing semicolons in PATH after micromamba install | The micromamba installer may concatenate PATH entries without a semicolon separator (e.g. `...WindowsAppsC:\Users\...`). This silently merges two entries into one invalid path. Fixed: `fix-path-registry.ps1` now detects drive-letter patterns mid-entry and splits them apart (step 2b). Same repair added to `bootstrap-windows.ps1`, `prepare-for-runbooks.ps1`, `install-apps.ps1`, and `import-apps.ps1`. |
+| PATH update not visible to new terminals | Writing to `HKCU\Environment\Path` does not notify Explorer. New terminals inherit the cached environment. Scripts must broadcast `WM_SETTINGCHANGE` after registry writes. `bootstrap-windows.ps1` now also verifies the update by spawning a fresh shell to confirm `claude` is reachable. |
 | PowerShell 7 installs as MSIX on ARM, `pwsh` not at standard path | `winget install Microsoft.PowerShell` on ARM64 installs the MSIX package, placing `pwsh.exe` at `AppData\Local\Microsoft\WindowsApps\` instead of `Program Files\PowerShell\7\`. Fixed: `install-apps.ps1` now includes the WindowsApps path in `VerifyPaths`. |
 | Em-dash characters in PS scripts cause parse errors | PowerShell 5.1 cannot parse UTF-8 files containing non-ASCII characters (like `---`) unless the file has a BOM. Scripts must use only ASCII characters. See `CLAUDE.md` "File encoding rules" for the full policy. |
 | PS5.1 `-Encoding UTF8` adds BOM, breaking bash files | PowerShell 5.1's `Set-Content -Encoding UTF8` and `Add-Content -Encoding UTF8` always add a UTF-8 BOM (`EF BB BF`). Bash interprets these bytes as part of the first command, producing `$'\357\273\277eval': command not found`. PS7 does **not** add a BOM. Since scripts may run under either version, never use `-Encoding UTF8` when writing files that bash reads. Use `[System.IO.File]::WriteAllText()` instead. `verify-prerequisites.ps1` now checks `.bash_profile` and `.bashrc` for accidental BOMs. |
@@ -234,7 +235,15 @@ This section documents issues found during the first run of the runbook on a Win
 
 **Impact:** The two entries merge into one invalid path. Any tool in `.local\bin` becomes unreachable. `fix-path-registry.ps1` previously split only on `;` and treated the concatenated string as a single valid entry, writing it back unchanged.
 
-**Fix:** `fix-path-registry.ps1` step 2b now scans each entry for drive-letter patterns (`X:\`) that appear mid-entry and splits them into separate entries.
+**Fix:** `fix-path-registry.ps1` step 2b now scans each entry for drive-letter patterns (`X:\`) that appear mid-entry and splits them into separate entries. The same repair logic was added to all scripts that read or write PATH: `bootstrap-windows.ps1`, `prepare-for-runbooks.ps1`, `install-apps.ps1`, and `import-apps.ps1`.
+
+### 8. PATH registry update not visible to new terminals without broadcast
+
+**Symptom:** After a script wrote the correct PATH to `HKCU\Environment\Path`, new CMD and PowerShell windows still could not find `claude`.
+
+**Root cause:** Writing to the registry does not notify Explorer. New terminals spawned from Explorer inherit the cached environment, not the updated registry. The `WM_SETTINGCHANGE` broadcast via `SendMessageTimeout(HWND_BROADCAST, ...)` is required for Explorer to reload the value.
+
+**Fix:** `bootstrap-windows.ps1` already broadcast after updating PATH, but lacked verification. It now re-reads the registry to confirm the entry stuck, then spawns a fresh `powershell.exe` that builds PATH from the registry and runs `Get-Command claude` to confirm it is reachable. Both checks increment `$FailCount` on failure.
 
 ---
 
