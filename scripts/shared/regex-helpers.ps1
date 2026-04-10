@@ -67,7 +67,7 @@ function REGEX_TestMiseActivated {
     return ($joined -match 'activated:\s*yes')
 }
 
-function REGEX_FindFirstNonBlankLine {
+function STRINGOP_FindFirstNonBlankLine {
     <#
     .SYNOPSIS
         Find the first line in a multi-line string that has visible content.
@@ -80,7 +80,7 @@ function REGEX_FindFirstNonBlankLine {
     .OUTPUTS
         The first non-blank line as a string, or empty string if all lines are blank.
     .EXAMPLE
-        REGEX_FindFirstNonBlankLine "`n  `n  error: something broke`n"
+        STRINGOP_FindFirstNonBlankLine "`n  `n  error: something broke`n"
         # Returns '  error: something broke'
     #>
     param([string]$Text)
@@ -94,7 +94,7 @@ function REGEX_FindFirstNonBlankLine {
     return ''
 }
 
-function REGEX_TestContainsAnyWord {
+function STRINGOP_TestContainsAnyWord {
     <#
     .SYNOPSIS
         Test whether a string contains any of the given words.
@@ -109,10 +109,10 @@ function REGEX_TestContainsAnyWord {
     .OUTPUTS
         $true if any word is found, $false otherwise.
     .EXAMPLE
-        REGEX_TestContainsAnyWord -Text 'package install failed' -Words @('failed', 'error')
+        STRINGOP_TestContainsAnyWord -Text 'package install failed' -Words @('failed', 'error')
         # Returns $true
     .EXAMPLE
-        REGEX_TestContainsAnyWord -Text 'package installed successfully' -Words @('failed', 'error')
+        STRINGOP_TestContainsAnyWord -Text 'package installed successfully' -Words @('failed', 'error')
         # Returns $false
     #>
     param(

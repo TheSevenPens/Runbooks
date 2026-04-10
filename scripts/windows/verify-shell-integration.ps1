@@ -61,8 +61,8 @@ function Test-ShellActivate {
             Write-Host "OK: $ShellName micromamba-activate"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "OK" }
         } else {
-            $errLine = REGEX_FindFirstNonBlankLine -Text $stderr
-            if (-not $errLine) { $errLine = REGEX_FindFirstNonBlankLine -Text $stdout }
+            $errLine = STRINGOP_FindFirstNonBlankLine -Text $stderr
+            if (-not $errLine) { $errLine = STRINGOP_FindFirstNonBlankLine -Text $stdout }
             Write-Host "FAIL: $ShellName micromamba-activate - $errLine"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "FAIL" }
             $script:FailCount++
@@ -144,8 +144,8 @@ if ($autoRun -and $autoRun.Contains('mamba_hook.bat')) {
             Write-Host "OK: CMD micromamba-activate"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "OK" }
         } else {
-            $errLine = REGEX_FindFirstNonBlankLine -Text $stderr
-            if (-not $errLine) { $errLine = REGEX_FindFirstNonBlankLine -Text $stdout }
+            $errLine = STRINGOP_FindFirstNonBlankLine -Text $stderr
+            if (-not $errLine) { $errLine = STRINGOP_FindFirstNonBlankLine -Text $stdout }
             Write-Host "FAIL: CMD micromamba-activate - $errLine"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
             $FailCount++
