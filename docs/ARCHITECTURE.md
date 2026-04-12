@@ -27,9 +27,9 @@ docs/FUTURES.md                — Roadmap and planned improvements
 2. `install-apps.ps1` — Git, GitHub Desktop, VS Code, Chrome, Terminal, PowerShell 7
 3. Oh My Posh (optional, prompted)
 4. Tool setup (pick one):
-   - **mise path** (`mise-env-runbook.md`): `winget install jdx.mise`, activate in PS7/PS5.1, add shims to PATH for CMD, `mise use -g`
+   - **mise path** (`mise-env-runbook.md`): `install-mise.ps1`, `install-mise-tools.ps1`
    - **conda path** (`conda-env-runbook.md`): `remove-conda.ps1`, micromamba install, `fix-path-registry.ps1`, `micromamba-shell-init.ps1`, `create-env.ps1`
-5. Verify with `mise doctor` (mise path) or `verify-shell-integration.ps1` (conda path)
+5. Verify with `verify-mise.ps1` (mise path) or `verify-shell-integration.ps1` (conda path)
 6. Post-setup manual sign-ins (GitHub Desktop, Chrome)
 
 **macOS:**
@@ -40,6 +40,7 @@ docs/FUTURES.md                — Roadmap and planned improvements
    - **mise path** (`mise-env-runbook.md`): `brew install mise`, activate in zsh/bash, `mise use -g`
    - **conda path** (`conda-env-runbook.md`): miniconda via brew, `conda init`, `create-env.sh`
 5. Verify with `mise doctor` (mise path) or `verify-shell-integration.sh` (conda path)
+   > 📝 macOS mise scripts (install-mise.sh, verify-mise.sh) are not yet written --- see FUTURES.md
 6. Post-setup manual sign-ins (GitHub Desktop, Chrome)
 
 ### Callout markers

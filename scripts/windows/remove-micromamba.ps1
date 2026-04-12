@@ -4,6 +4,7 @@
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File remove-micromamba.ps1
 #
 # Actions:
+#   0. Stop processes using micromamba files (prevents locked-file failures)
 #   1. Remove micromamba binary directory (AppData\Local\micromamba)
 #   2. Remove micromamba root prefix (~/micromamba) including all environments
 #   3. Clean micromamba entries from PATH registry
@@ -59,6 +60,45 @@ if (-not $mambaFound) {
 
 Write-Host "INFO: Micromamba installation detected - starting removal"
 
+# --- Step 0: Stop processes using micromamba files ---
+
+Write-Host ""
+Write-Host "--- Step 0: Stop processes using micromamba files ---"
+
+$dirsToCheck = @($MambaBinDir, $MambaRootPrefix) | Where-Object { Test-Path $_ }
+if ($dirsToCheck.Count -gt 0) {
+    $lockedProcs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $p = $_.Path
+        if ($p) {
+            foreach ($d in $dirsToCheck) {
+                if ($p.StartsWith($d, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+            }
+        }
+        return $false
+    })
+    if ($lockedProcs.Count -gt 0) {
+        Write-Host "WARN: $($lockedProcs.Count) process(es) using micromamba files:"
+        foreach ($proc in $lockedProcs) {
+            Write-Host "  PID $($proc.Id): $($proc.ProcessName) ($($proc.Path))"
+        }
+        Write-Host "INFO: Stopping processes to release file locks"
+        foreach ($proc in $lockedProcs) {
+            try {
+                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+                Write-Host "OK: Stopped PID $($proc.Id) ($($proc.ProcessName))"
+            } catch {
+                Write-Host "WARN: Could not stop PID $($proc.Id) ($($proc.ProcessName)): $_"
+            }
+        }
+        # Wait for handles to release
+        Start-Sleep -Seconds 2
+    } else {
+        Write-Host "OK: No processes using micromamba files"
+    }
+} else {
+    Write-Host "SKIP: No micromamba directories to check"
+}
+
 # --- Step 1: Remove micromamba binary directory ---
 
 Write-Host ""
@@ -74,8 +114,9 @@ if ([string]::IsNullOrWhiteSpace($MambaBinDir)) {
             Remove-Item -Recurse -Force $MambaBinDir -ErrorAction Stop
             Write-Host "OK: Removed $MambaBinDir"
         } catch {
-            Write-Host "WARN: Could not fully remove $MambaBinDir - files may be locked"
-            Write-Host "  Close all terminals and retry, or delete manually"
+            Write-Host "FAIL: Could not remove $MambaBinDir - files may still be locked"
+            Write-Host "  $_"
+            $FailCount++
         }
     } else {
         Write-Host "WARN: $MambaBinDir exists but does not contain micromamba.exe - skipping"
@@ -120,8 +161,9 @@ if ($MambaRootPrefix -ne $expectedRootPrefix) {
             Remove-Item -Recurse -Force $MambaRootPrefix -ErrorAction Stop
             Write-Host "OK: Removed $MambaRootPrefix"
         } catch {
-            Write-Host "WARN: Could not fully remove $MambaRootPrefix - files may be locked"
-            Write-Host "  Close all terminals and retry, or delete manually"
+            Write-Host "FAIL: Could not remove $MambaRootPrefix - files may still be locked"
+            Write-Host "  $_"
+            $FailCount++
         }
     }
 } else {
@@ -259,13 +301,15 @@ if ($mambaStillExists) {
 }
 
 if (Test-Path $MambaBinDir) {
-    Write-Host "WARN: $MambaBinDir still exists - may have locked files"
+    Write-Host "FAIL: $MambaBinDir still exists - processes may still hold locks"
+    $FailCount++
 } else {
     Write-Host "OK: $MambaBinDir removed"
 }
 
 if (Test-Path $MambaRootPrefix) {
-    Write-Host "WARN: $MambaRootPrefix still exists - may have locked files"
+    Write-Host "FAIL: $MambaRootPrefix still exists - processes may still hold locks"
+    $FailCount++
 } else {
     Write-Host "OK: $MambaRootPrefix removed"
 }

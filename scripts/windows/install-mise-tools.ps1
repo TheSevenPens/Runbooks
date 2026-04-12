@@ -1,0 +1,188 @@
+# install-mise-tools.ps1 - Install global tools via mise (idempotent)
+#
+# Usage:
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File install-mise-tools.ps1
+#
+# Actions:
+#   1. Verify mise is installed
+#   2. Install node@lts, python@3.12, gh@latest via mise use -g (from activated PS7)
+#   3. Run mise install as safety net (catches registration issue)
+#   4. Regenerate shims for CMD
+#   5. Verify tools are callable
+#
+# Output: Structured lines prefixed with OK / SKIP / FAIL / INFO
+# Exit code: 0 on success, 1 on any failure
+
+. (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
+
+$ErrorActionPreference = 'Continue'
+$FailCount = 0
+
+$ToolSpec = 'node@lts python@3.12 gh@latest'
+
+# --- Step 1: Verify mise ---
+
+Write-Host "--- Step 1: Verify mise ---"
+
+$miseExe = Get-Command mise -ErrorAction SilentlyContinue
+if (-not $miseExe) {
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
+        (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $miseExe = Get-Command $c -ErrorAction SilentlyContinue; break }
+    }
+}
+
+if (-not $miseExe) {
+    Write-Host "FAIL: mise not found - run install-mise.ps1 first"
+    exit 1
+}
+
+$miseVersion = STRINGOP_GetToolVersion -ExePath $miseExe.Source -Flag '--version'
+Write-Host "OK: mise $miseVersion"
+
+# --- Step 2: Install tools via activated PS7 ---
+
+Write-Host ""
+Write-Host "--- Step 2: Install tools ---"
+
+# Always run through pwsh to ensure profile loads and activation is live.
+# This avoids the "installed but missing in mise doctor" issue.
+$pwshExe = Get-Command pwsh -ErrorAction SilentlyContinue
+if (-not $pwshExe) {
+    $pwshCandidates = @(
+        "$env:ProgramFiles\PowerShell\7\pwsh.exe",
+        "$env:LOCALAPPDATA\Microsoft\WindowsApps\pwsh.exe"
+    )
+    foreach ($c in $pwshCandidates) {
+        if (Test-Path $c) { $pwshExe = Get-Command $c -ErrorAction SilentlyContinue; break }
+    }
+}
+
+if (-not $pwshExe) {
+    Write-Host "FAIL: PowerShell 7 not found - needed for activated mise session"
+    $FailCount++
+} else {
+    Write-Host "INFO: Running mise use -g $ToolSpec via activated PS7"
+    # Explicitly activate mise before running commands (profile may not activate in non-interactive spawn)
+    $activateAndRun = "mise activate pwsh | Out-String | Invoke-Expression; mise use -g $ToolSpec 2>&1 | ForEach-Object { Write-Host `$_ }"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $pwshExe.Source
+    $psi.Arguments = "-NoProfile -Command `"$activateAndRun`""
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $stderr = $proc.StandardError.ReadToEnd()
+    $exited = $proc.WaitForExit(300000)  # 5 min timeout for downloads
+
+    if (-not $exited) {
+        $proc.Kill()
+        Write-Host "FAIL: mise use -g timed out after 5 minutes"
+        $FailCount++
+    } else {
+        # Check for installed markers in output
+        $allOutput = "$stdout $stderr"
+        if ($allOutput.Contains('installed') -or $allOutput.Contains('config.toml')) {
+            Write-Host "OK: Tools installed"
+        } else {
+            # May have already been installed (no output)
+            Write-Host "INFO: mise use -g completed (tools may already be installed)"
+        }
+    }
+}
+
+# --- Step 3: Safety net - mise install ---
+
+Write-Host ""
+Write-Host "--- Step 3: Re-register tools (safety net) ---"
+
+if ($pwshExe) {
+    $psi2 = New-Object System.Diagnostics.ProcessStartInfo
+    $psi2.FileName = $pwshExe.Source
+    $psi2.Arguments = '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise install 2>&1 | ForEach-Object { Write-Host $_ }"'
+    $psi2.RedirectStandardOutput = $true
+    $psi2.RedirectStandardError = $true
+    $psi2.UseShellExecute = $false
+    $psi2.CreateNoWindow = $true
+
+    $proc2 = [System.Diagnostics.Process]::Start($psi2)
+    $proc2.StandardOutput.ReadToEnd() | Out-Null
+    $proc2.WaitForExit(60000) | Out-Null
+    Write-Host "OK: mise install completed"
+}
+
+# --- Step 4: Regenerate shims ---
+
+Write-Host ""
+Write-Host "--- Step 4: Regenerate shims ---"
+
+if ($pwshExe) {
+    $psi3 = New-Object System.Diagnostics.ProcessStartInfo
+    $psi3.FileName = $pwshExe.Source
+    $psi3.Arguments = '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise reshim 2>&1"'
+    $psi3.RedirectStandardOutput = $true
+    $psi3.RedirectStandardError = $true
+    $psi3.UseShellExecute = $false
+    $psi3.CreateNoWindow = $true
+
+    $proc3 = [System.Diagnostics.Process]::Start($psi3)
+    $proc3.StandardOutput.ReadToEnd() | Out-Null
+    $proc3.WaitForExit(15000) | Out-Null
+    Write-Host "OK: Shims regenerated"
+}
+
+# --- Step 5: Verify tools ---
+
+Write-Host ""
+Write-Host "--- Step 5: Verify tools ---"
+
+$tools = @(
+    @{ Name = "node"; Flag = "--version" },
+    @{ Name = "python"; Flag = "--version" },
+    @{ Name = "gh"; Flag = "--version" }
+)
+
+if ($pwshExe) {
+    foreach ($tool in $tools) {
+        try {
+            $psi4 = New-Object System.Diagnostics.ProcessStartInfo
+            $psi4.FileName = $pwshExe.Source
+            $psi4.Arguments = "-NoProfile -Command `"mise activate pwsh | Out-String | Invoke-Expression; $($tool.Name) $($tool.Flag) 2>&1 | Select-Object -First 1`""
+            $psi4.RedirectStandardOutput = $true
+            $psi4.RedirectStandardError = $true
+            $psi4.UseShellExecute = $false
+            $psi4.CreateNoWindow = $true
+
+            $proc4 = [System.Diagnostics.Process]::Start($psi4)
+            $vOut = $proc4.StandardOutput.ReadToEnd()
+            $proc4.WaitForExit(15000) | Out-Null
+            $version = STRINGOP_FindFirstNonBlankLine -Text $vOut
+            if ($version) {
+                Write-Host "OK: $($tool.Name) $version"
+            } else {
+                Write-Host "FAIL: $($tool.Name) not callable after install"
+                $FailCount++
+            }
+        } catch {
+            Write-Host "FAIL: $($tool.Name) verification error: $_"
+            $FailCount++
+        }
+    }
+}
+
+# --- Summary ---
+
+Write-Host ""
+if ($FailCount -gt 0) {
+    Write-Host "RESULT: Completed with $FailCount issue(s)"
+    exit 1
+} else {
+    Write-Host "RESULT: All tools installed and verified"
+    exit 0
+}

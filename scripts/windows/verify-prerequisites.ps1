@@ -3,16 +3,41 @@
 # Usage:
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-prerequisites.ps1
 #   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-prerequisites.ps1 -Env node1
+#   powershell.exe -NoProfile -ExecutionPolicy Bypass -File verify-prerequisites.ps1 -ToolManager mise
 #
 # Output: Structured lines prefixed with OK / WARN / FAIL / SKIP
 # Exit code: 0 if all required tools present, 1 if any FAIL
 
 param(
-    [string]$Env = ""
+    [string]$Env = "",
+    [ValidateSet('auto', 'micromamba', 'mise')]
+    [string]$ToolManager = "auto"
 )
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
+
+# --- Resolve tool manager ---
+# Auto-detect: check for mise first (newer), then micromamba (legacy)
+if ($ToolManager -eq 'auto') {
+    $hasMise = (Get-Command mise -ErrorAction SilentlyContinue) -ne $null
+    if (-not $hasMise) {
+        $miseCandidates = @(
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
+            (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
+        )
+        foreach ($c in $miseCandidates) {
+            if (Test-Path $c) { $hasMise = $true; break }
+        }
+    }
+    $hasMamba = (Test-Path "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe") -or
+                ((Get-Command micromamba -ErrorAction SilentlyContinue) -ne $null)
+
+    if ($hasMise) { $ToolManager = 'mise' }
+    elseif ($hasMamba) { $ToolManager = 'micromamba' }
+    else { $ToolManager = 'none' }
+}
+Write-Host "INFO: Tool manager: $ToolManager"
 
 # --- OneDrive Documents redirection check ---
 $docsDir = [Environment]::GetFolderPath('MyDocuments')
@@ -129,101 +154,153 @@ Test-CliTool -Name "git" -Command "git"
 Test-CliTool -Name "code" -Command "code"
 Test-CliTool -Name "pwsh" -Command "pwsh" -Required $false
 
-# --- Micromamba (check canonical path first) ---
+# --- Tool manager checks ---
 
-$mmCanonical = "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
-$mmExe = $null
+if ($ToolManager -eq 'mise') {
+    # --- mise checks ---
 
-if (Test-Path $mmCanonical) {
-    $mmExe = $mmCanonical
-} else {
-    $mmCmd = Get-Command micromamba -ErrorAction SilentlyContinue
-    if ($mmCmd) { $mmExe = $mmCmd.Source }
-}
-
-if ($mmExe) {
-    $mmVersion = & $mmExe --version 2>$null | Select-Object -First 1
-    Write-Host "OK: micromamba $mmVersion ($mmExe)"
-} else {
-    Write-Host "FAIL: micromamba not found"
-    $FailCount++
-}
-
-# --- MAMBA_EXE consistency check ---
-# Verify that all shell configs point MAMBA_EXE to the same existing binary.
-
-$mambaExeRefs = @{}
-
-# PowerShell profiles
-$docsDir = [Environment]::GetFolderPath('MyDocuments')
-$psProfilesToScan = @(
-    @{ Name = "PS 5.1 profile"; Path = Join-Path $docsDir "WindowsPowerShell\profile.ps1" },
-    @{ Name = "PS 7 profile";   Path = Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1" }
-)
-foreach ($entry in $psProfilesToScan) {
-    if (Test-Path $entry.Path) {
-        $c = Get-Content $entry.Path -Raw
-        if ($c -match '\$Env:MAMBA_EXE\s*=\s*"([^"]+)"') {
-            $mambaExeRefs[$entry.Name] = $Matches[1]
+    $miseCmd = Get-Command mise -ErrorAction SilentlyContinue
+    if (-not $miseCmd) {
+        $miseCandidates = @(
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
+            (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
+        )
+        foreach ($c in $miseCandidates) {
+            if (Test-Path $c) { $miseCmd = Get-Command $c -ErrorAction SilentlyContinue; break }
         }
     }
-}
-
-# .bash_profile check removed -- Git Bash no longer supported on Windows.
-
-# .bat wrapper
-$batPath = "$env:USERPROFILE\micromamba\condabin\micromamba.bat"
-if (Test-Path $batPath) {
-    $c = Get-Content $batPath -Raw
-    if ($c -match 'MAMBA_EXE=(.+)$') {
-        $mambaExeRefs[".bat wrapper"] = $Matches[1].Trim().Trim('"')
-    }
-}
-
-if ($mambaExeRefs.Count -gt 0) {
-    # Normalize all paths to Windows-style for comparison
-    function ConvertTo-WindowsPath {
-        param([string]$Path)
-        $p = $Path -replace '/', '\'
-        # Convert /c/Users/... to C:\Users\...
-        if ($p -match '^\\([a-zA-Z])\\') {
-            $p = "$($Matches[1].ToUpper()):\$($p.Substring(3))"
-        }
-        # Convert /mnt/c/Users/... (WSL style) to C:\Users\...
-        elseif ($p -match '^\\mnt\\([a-zA-Z])\\') {
-            $p = "$($Matches[1].ToUpper()):\$($p.Substring(6))"
-        }
-        return $p
+    if ($miseCmd) {
+        $miseVer = & $miseCmd.Source --version 2>$null | Select-Object -First 1
+        Write-Host "OK: mise $miseVer ($($miseCmd.Source))"
+    } else {
+        Write-Host "FAIL: mise not found"
+        $FailCount++
     }
 
-    $normalizedRefs = @{}
-    foreach ($entry in $mambaExeRefs.GetEnumerator()) {
-        $normalizedRefs[$entry.Key] = ConvertTo-WindowsPath $entry.Value
+    # Check shell profiles for activation
+    $docsDir = [Environment]::GetFolderPath('MyDocuments')
+    $ps7Prof = Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1"
+    if ((Test-Path $ps7Prof) -and (Get-Content $ps7Prof -Raw).Contains('mise activate')) {
+        Write-Host "OK: PS7 profile contains mise activation"
+    } else {
+        Write-Host "WARN: PS7 profile missing mise activation - run install-mise.ps1"
     }
 
-    $uniquePaths = $normalizedRefs.Values | Select-Object -Unique
-    $allExist = $true
-    $allMatch = ($uniquePaths.Count -le 1)
+    $ps5Prof = Join-Path $docsDir "WindowsPowerShell\profile.ps1"
+    if ((Test-Path $ps5Prof) -and (Get-Content $ps5Prof -Raw).Contains('mise activate')) {
+        Write-Host "OK: PS5.1 profile contains mise activation"
+    } else {
+        Write-Host "WARN: PS5.1 profile missing mise activation - run install-mise.ps1"
+    }
 
-    foreach ($entry in $normalizedRefs.GetEnumerator()) {
-        if (-not (Test-Path $entry.Value)) {
-            $origPath = $mambaExeRefs[$entry.Key]
-            $normNote = if ($origPath -ne $entry.Value) { " (normalized: $($entry.Value))" } else { "" }
-            Write-Host "FAIL: MAMBA_EXE in $($entry.Key) points to non-existent ${origPath}${normNote}"
-            $FailCount++
-            $allExist = $false
+    # Check shims on PATH
+    $regKey2 = Get-Item 'HKCU:\Environment' -ErrorAction SilentlyContinue
+    if ($regKey2) {
+        $pv = $regKey2.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+        if ($pv.Contains('mise\shims')) {
+            Write-Host "OK: mise shims on registry PATH"
+        } else {
+            Write-Host "WARN: mise shims not on registry PATH - CMD tools may not work"
         }
     }
 
-    if (-not $allMatch) {
-        Write-Host "WARN: MAMBA_EXE paths differ across shell configs:"
+    # Check global config exists
+    $miseConfig = Join-Path $env:USERPROFILE '.config\mise\config.toml'
+    if (Test-Path $miseConfig) {
+        Write-Host "OK: mise global config exists"
+    } else {
+        Write-Host "WARN: mise global config not found - run install-mise-tools.ps1"
+    }
+
+} elseif ($ToolManager -eq 'micromamba') {
+    # --- Micromamba (check canonical path first) ---
+
+    $mmCanonical = "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
+    $mmExe = $null
+
+    if (Test-Path $mmCanonical) {
+        $mmExe = $mmCanonical
+    } else {
+        $mmCmd = Get-Command micromamba -ErrorAction SilentlyContinue
+        if ($mmCmd) { $mmExe = $mmCmd.Source }
+    }
+
+    if ($mmExe) {
+        $mmVersion = & $mmExe --version 2>$null | Select-Object -First 1
+        Write-Host "OK: micromamba $mmVersion ($mmExe)"
+    } else {
+        Write-Host "FAIL: micromamba not found"
+        $FailCount++
+    }
+
+    # --- MAMBA_EXE consistency check ---
+    $mambaExeRefs = @{}
+    $docsDir = [Environment]::GetFolderPath('MyDocuments')
+    $psProfilesToScan = @(
+        @{ Name = "PS 5.1 profile"; Path = Join-Path $docsDir "WindowsPowerShell\profile.ps1" },
+        @{ Name = "PS 7 profile";   Path = Join-Path $docsDir "PowerShell\Microsoft.PowerShell_profile.ps1" }
+    )
+    foreach ($entry in $psProfilesToScan) {
+        if (Test-Path $entry.Path) {
+            $c = Get-Content $entry.Path -Raw
+            if ($c -match '\$Env:MAMBA_EXE\s*=\s*"([^"]+)"') {
+                $mambaExeRefs[$entry.Name] = $Matches[1]
+            }
+        }
+    }
+
+    $batPath = "$env:USERPROFILE\micromamba\condabin\micromamba.bat"
+    if (Test-Path $batPath) {
+        $c = Get-Content $batPath -Raw
+        if ($c -match 'MAMBA_EXE=(.+)$') {
+            $mambaExeRefs[".bat wrapper"] = $Matches[1].Trim().Trim('"')
+        }
+    }
+
+    if ($mambaExeRefs.Count -gt 0) {
+        function ConvertTo-WindowsPath {
+            param([string]$Path)
+            $p = $Path -replace '/', '\'
+            if ($p -match '^\\([a-zA-Z])\\') {
+                $p = "$($Matches[1].ToUpper()):\$($p.Substring(3))"
+            } elseif ($p -match '^\\mnt\\([a-zA-Z])\\') {
+                $p = "$($Matches[1].ToUpper()):\$($p.Substring(6))"
+            }
+            return $p
+        }
+
+        $normalizedRefs = @{}
         foreach ($entry in $mambaExeRefs.GetEnumerator()) {
-            Write-Host "  $($entry.Key): $($entry.Value)"
+            $normalizedRefs[$entry.Key] = ConvertTo-WindowsPath $entry.Value
         }
-        Write-Host "  Run micromamba-shell-init.ps1 to fix"
-    } elseif ($allExist) {
-        Write-Host "OK: MAMBA_EXE consistent across all shell configs"
+
+        $uniquePaths = $normalizedRefs.Values | Select-Object -Unique
+        $allExist = $true
+        $allMatch = ($uniquePaths.Count -le 1)
+
+        foreach ($entry in $normalizedRefs.GetEnumerator()) {
+            if (-not (Test-Path $entry.Value)) {
+                $origPath = $mambaExeRefs[$entry.Key]
+                $normNote = if ($origPath -ne $entry.Value) { " (normalized: $($entry.Value))" } else { "" }
+                Write-Host "FAIL: MAMBA_EXE in $($entry.Key) points to non-existent ${origPath}${normNote}"
+                $FailCount++
+                $allExist = $false
+            }
+        }
+
+        if (-not $allMatch) {
+            Write-Host "WARN: MAMBA_EXE paths differ across shell configs:"
+            foreach ($entry in $mambaExeRefs.GetEnumerator()) {
+                Write-Host "  $($entry.Key): $($entry.Value)"
+            }
+            Write-Host "  Run micromamba-shell-init.ps1 to fix"
+        } elseif ($allExist) {
+            Write-Host "OK: MAMBA_EXE consistent across all shell configs"
+        }
     }
+} else {
+    Write-Host "FAIL: No tool manager found (neither mise nor micromamba)"
+    $FailCount++
 }
 
 # --- GUI Apps (winget only) ---
@@ -244,9 +321,9 @@ if ($regKey) {
     }
 }
 
-# --- Optional: Environment packages ---
+# --- Optional: Environment packages (micromamba only) ---
 
-if ($Env -ne "" -and $mmExe) {
+if ($Env -ne "" -and $ToolManager -eq 'micromamba' -and $mmExe) {
     Write-Host ""
     Write-Host "--- Environment: $Env ---"
 

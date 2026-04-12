@@ -271,7 +271,7 @@ That's the whole runbook. No Section 0, no create-env, no shell-integration veri
 | `scripts/mac/verify-prerequisites.sh` | Still needed, simplified (checks mise instead of conda) |
 | `scripts/windows/verify-prerequisites.ps1` | Still needed, simplified |
 
-New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and optionally `install-tools.sh` / `install-tools.ps1` wrapping `mise use -g`.
+New scripts needed: `install-mise.sh` (macOS). Windows scripts already exist: `install-mise.ps1`, `install-mise-tools.ps1`, `verify-mise.ps1`.
 
 **What we would give up.**
 
@@ -348,6 +348,21 @@ New scripts needed: `install-mise.sh` / `install-mise.ps1` (~15 lines each) and 
 **Recommendation:** Drop Git Bash. The complexity cost of supporting it (BOM rules, path format translation, broken subshells, per-tool workarounds) exceeds the value. PowerShell 7 is the natural Windows shell for this workflow.
 
 **When to do this:** Next time the Windows runbook is revised for a fresh machine setup. It's a cleanup task, not urgent.
+
+### Mise automation scripts for Windows --- Done (2026-04-12)
+
+The mise runbook had no automation scripts (pure inline commands). Added three Windows scripts to match the robustness level of the conda path:
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/windows/install-mise.ps1` | Idempotent mise install + PS7/PS5.1 profile activation + CMD shims on PATH |
+| `scripts/windows/install-mise-tools.ps1` | Install global tools via activated PS7 (avoids "missing" registration bug) + reshim + verify |
+| `scripts/windows/verify-mise.ps1` | Cross-shell verification: mise doctor in PS7/PS5.1, tool versions in PS7/PS5.1/CMD, summary table |
+
+Also updated:
+- `verify-prerequisites.ps1`: Added `-ToolManager` parameter (`auto`/`mise`/`micromamba`) so it works after mise migration
+- `remove-micromamba.ps1`: Added Step 0 (detect and stop processes using micromamba files before deletion)
+- `mise-env-runbook.md`: References new scripts, updated Known Issues and checklist
 
 **Implemented 2026-04-09.** Changes made:
 - `verify-shell-integration.ps1`: Removed Git Bash test section

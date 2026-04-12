@@ -48,18 +48,22 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/remove-m
 
 ---
 
-## Section 1 --- Install mise
+## Sections 1-2 --- Install mise and activate in shells
+
+### Windows (automated)
+
+> 📝 **Note:** The script installs mise, configures PS7/PS5.1 profiles with activation lines, adds shims to PATH for CMD, and broadcasts WM_SETTINGCHANGE. It is idempotent --- already-configured items are skipped.
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-mise.ps1
+```
+
+> ⚠️ **Manual step:** Close and reopen your terminal after running so activation takes effect.
 
 ### macOS
 
 ```zsh
 brew install mise
-```
-
-### Windows
-
-```powershell
-winget install jdx.mise
 ```
 
 ### Linux (Fedora)
@@ -78,7 +82,9 @@ mise --version
 
 ---
 
-## Section 2 --- Activate mise in your shell
+## Section 2 --- Activate mise in your shell (manual alternative)
+
+> 📝 **Note:** On Windows, `install-mise.ps1` handles all activation setup. This section is only needed if you want to configure activation manually, or on macOS/Linux.
 
 mise needs a single activation line in your shell config. This makes mise manage your PATH so installed tools are available.
 
@@ -151,6 +157,16 @@ mise doctor
 
 ## Section 3 --- Install tools
 
+### Windows (automated)
+
+> 📝 **Note:** The script runs `mise use -g` from an activated PS7 session (avoiding the "installed but missing" issue), runs `mise install` as a safety net, regenerates shims for CMD, and verifies all tools are callable.
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-mise-tools.ps1
+```
+
+### Manual (any platform)
+
 mise installs tools globally with `mise use -g`. This writes to `~/.config/mise/config.toml`.
 
 ```sh
@@ -207,6 +223,16 @@ For most use cases, global tools are sufficient.
 ## Section 4 --- Verify shell integration
 
 > 🤔 **Claude Code: Always run this verification and show the results to the user as a summary table.**
+
+### Windows (automated)
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/verify-mise.ps1
+```
+
+> 📝 **Note:** The script checks mise installation, profile activation lines, shims on PATH, runs `mise doctor` in PS7 and PS5.1, and verifies tool versions across PS7, PS5.1, and CMD. It produces a summary table.
+
+### Manual verification
 
 Test that mise-managed tools are available in each shell. Unlike conda, there's no `activate` command to test --- tools should just be on PATH in any shell that has the activation line.
 
@@ -290,8 +316,42 @@ After `mise doctor` passes, confirm the tools are callable in **every** shell --
 | `mise doctor` reports "shims not on PATH" | Expected when using activation (not shims) in PowerShell. Activation manages PATH dynamically instead of using shims. For Git Bash (where we use shims), add `$HOME/AppData/Local/mise/shims` to PATH. |
 | PowerShell `-Encoding UTF8` adds BOM to `.bash_profile` | PowerShell's `Add-Content -Encoding UTF8` writes a UTF-8 BOM (`EF BB BF`) which bash interprets as a literal command (`$'\357\273\277eval'`). Write `.bash_profile` with a tool that doesn't add BOM, or use `[System.IO.File]::WriteAllText()`. |
 | No `remove-micromamba.ps1` script | Fixed: `scripts/windows/remove-micromamba.ps1` now automates full removal (binary, root prefix, PATH, CMD AutoRun, PS profiles, WM_SETTINGCHANGE broadcast). |
-| `mise use -g` from non-PS7 shell installs tools but `mise doctor` shows "(missing)" | When `mise use -g` runs outside of an activated PS7 session (e.g., from Claude Code's bash, CMD, or a PS5 terminal), mise installs tool files to disk but may not fully register them. `mise doctor` in PS7 then reports tools as "(missing)". Fix: run `mise install` from an activated PS7 session to re-register. To avoid the issue, run `mise use -g` from PS7 after activation. |
+| `mise use -g` from non-activated shell installs tools but `mise doctor` shows "(missing)" | When `mise use -g` runs outside of an activated session (e.g., from Claude Code's bash, or even `pwsh -Command` where activation doesn't fully take effect), mise writes config.toml but doesn't fully register the tools. A fresh interactive PS7 shell then reports all tools as "(missing)" and they aren't on PATH. Fix: run `mise install` from an interactive activated PS7 session. The `install-mise-tools.ps1` script now uses `-NoProfile` with explicit `mise activate` to avoid this. |
 | `mise doctor` from CMD shows all tools as "(missing)" and shell as "(unknown)" | Expected. mise has no CMD support. Always use PowerShell 7 for mise operations. |
+| `mise doctor` returns exit code 1 on version update warnings | `mise doctor` exits non-zero when it has warnings (including "new version available"). Scripts should check output for "No problems found" rather than relying on exit code alone. |
+| Locked files during micromamba removal | Running processes (e.g., VS Code extensions using node from a micromamba env) hold file locks. Fixed: `remove-micromamba.ps1` now detects and stops these processes before attempting deletion (Step 0). |
+| `verify-prerequisites.ps1` fails after mise migration | The script checked for micromamba unconditionally. Fixed: added `-ToolManager` parameter (`auto`/`mise`/`micromamba`). Auto-detect prefers mise over micromamba. |
+| `python` launches Microsoft Store instead of mise python | Windows ships App Execution Aliases that redirect `python.exe` to the Microsoft Store. These stubs at `WindowsApps\python.exe` may take priority over mise's PATH entries. Fix: Settings > Apps > Advanced app settings > App execution aliases > turn off `python.exe` and `python3.exe`. |
+
+---
+
+## Second-Run Discoveries (Windows on ARM, 2026-04-12)
+
+Issues found when validating the mise runbook end-to-end and building automation scripts.
+
+### 1. `mise use -g` from non-activated shell produces "(missing)" tools
+
+**Symptom:** After running `mise use -g node@lts python@3.12 gh@latest` via Claude Code (which spawns pwsh as a subprocess), a fresh interactive PS7 shell reported all tools as `(missing)` in `mise doctor`. `node` was not found and `python` launched the Microsoft Store.
+
+**Root cause:** When `pwsh -Command "mise use -g ..."` runs, the profile loads and `mise activate` runs, but in a non-interactive subprocess the activation doesn't fully take effect before `mise use -g` executes. mise writes `config.toml` correctly and downloads files to disk, but doesn't register them in a way that a subsequent activated session recognizes. Even the `mise install` safety net (run in the same non-interactive context) didn't fix it.
+
+**Fix:** `install-mise-tools.ps1` now uses `-NoProfile` with explicit `mise activate pwsh | Out-String | Invoke-Expression` before every mise command, guaranteeing activation regardless of how the process was spawned. If tools still show as `(missing)`, run `mise install` from an interactive PS7 shell.
+
+### 2. Windows App Execution Aliases intercept `python`
+
+**Symptom:** `python` launched the Microsoft Store "Python Install Manager" instead of mise's Python 3.12.
+
+**Root cause:** Windows ships App Execution Aliases (`python.exe`, `python3.exe`) at `WindowsApps\` that redirect to the Microsoft Store. These stubs appear on PATH via `WindowsApps` and can take priority over mise's injected paths depending on PATH order.
+
+**Fix:** Disable the aliases: Settings > Apps > Advanced app settings > App execution aliases > turn off `python.exe` and `python3.exe`.
+
+### 3. Locked files during micromamba removal
+
+**Symptom:** `remove-micromamba.ps1` reported `WARN: Could not fully remove` for both micromamba directories. Directories remained on disk.
+
+**Root cause:** VS Code extensions had 4 `node.exe` processes running from the micromamba `node1` environment, holding file locks.
+
+**Fix:** `remove-micromamba.ps1` now includes Step 0 which detects processes using micromamba files, stops them with `Stop-Process -Force`, waits for handles to release, then proceeds with deletion. Post-deletion checks now report `FAIL` (not `WARN`) if directories survive.
 
 ---
 
@@ -362,20 +422,10 @@ The runbook noted there's no `remove-micromamba.ps1` script. Removal required: d
 # mise-env-runbook status --- Windows
 
 - [ ] Conda/micromamba removed (if previously installed)
-- [ ] mise installed via `winget install jdx.mise`
-- [ ] mise --version verified
-- [ ] Activation line added to PowerShell 7 profile
-- [ ] Activation line added to PowerShell 5.1 profile
-- [ ] Shims directory added to user PATH (for CMD)
+- [ ] mise installed and activated (install-mise.ps1)
 - [ ] Terminal restarted
-- [ ] `mise doctor` passes in PS7 (activation verified)
-- [ ] `mise doctor` passes in PS5.1 (activation verified, chpwd warning OK)
-- [ ] Tools installed: `mise use -g node@lts python@3.12 gh@latest`
-- [ ] `mise doctor` passes (no tools missing)
-- [ ] node --version verified
-- [ ] python --version verified
-- [ ] gh --version verified
-- [ ] Shell integration verified (PS7 + PS5.1 + CMD, table shown to user)
+- [ ] Tools installed (install-mise-tools.ps1)
+- [ ] Shell integration verified (verify-mise.ps1, table shown to user)
 ```
 
 </details>
