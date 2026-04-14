@@ -28,4 +28,4 @@ These bash scripts were the original macOS automation scripts. They were replace
 
 | File | Why |
 |------|-----|
-| `repro_posix_spawn.c` | Reproducer for the libmamba codesign bug (see `macos_micromamba_debug_runbook.md`) |
+| `repro_posix_spawn.c` | Reproducer for the libmamba codesign bug (see `mac-micromamba-debug-runbook.md`) |

@@ -9,8 +9,8 @@ A user opens Claude Code and tells it which runbook to follow. Claude Code reads
 ### Repo structure
 
 ```
-setup-runbook-windows.md       — Windows machine setup
-setup-runbook-mac.md           — macOS machine setup
+windows-setup-runbook.md       — Windows machine setup
+mac-setup-runbook.md           — macOS machine setup
 conda-env-runbook.md           — Conda/micromamba env setup (legacy, per-platform)
 mise-env-runbook.md            — Tool version management via mise (cross-platform)
 scripts/windows/*.ps1          — PowerShell automation scripts

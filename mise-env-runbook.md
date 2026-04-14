@@ -7,7 +7,7 @@
 > **Why mise instead of conda/micromamba?** The runbooks only use conda-forge to install three tools (`nodejs`, `python`, `gh`) that are first-class in every mainstream package ecosystem. mise installs them directly without libmamba, shell hook complexity, channel config, or the per-platform manager split (micromamba on Windows, miniconda on macOS). See `docs/FUTURES.md` for the full rationale.
 >
 > **Prerequisites:**
-> - **macOS:** Homebrew installed (see [setup-runbook-mac.md](setup-runbook-mac.md))
+> - **macOS:** Homebrew installed (see [mac-setup-runbook.md](mac-setup-runbook.md))
 > - **Windows:** winget available (ships with Windows 11; on Windows 10, install via Microsoft Store)
 >
 > **Parallel runbook:** This runbook exists alongside `conda-env-runbook.md`. Both are valid; pick one when setting up a machine. If you previously used the conda runbook, see Section 0 for cleanup.

@@ -89,7 +89,7 @@ Created the macOS equivalent of `install-apps.ps1` — an idempotent script that
 - Verify-after-install for CLI tools
 - Standard structured output (OK/SKIP/FAIL/INFO/WARN)
 
-### `setup-runbook-mac.md` — consolidated app install, manual steps at end
+### `mac-setup-runbook.md` — consolidated app install, manual steps at end
 
 Replaced individual brew install sections (2–5) with a single section pointing to `install-apps.sh`, matching the Windows runbook pattern. Moved manual sign-in steps (GitHub Desktop, Chrome) to a new "Post-Setup Manual Checklist" section at the end so the automated flow isn't interrupted. Added a quick-check command at the top (`verify-prerequisites.sh`). Updated the Status Tracker to reflect the new structure.
 
@@ -120,6 +120,6 @@ Converted `prepare_for_runbooks.md` (a short markdown doc with manual copy-paste
 
 After installing PowerShell 7 via winget, the script tried to verify with `Get-Command pwsh`, which fails in the same session because PATH hasn't refreshed. Added a `VerifyPath` property to the app definition that points to the canonical install location. Both the pre-install check and post-install verification now fall back to this path. Also fixed version reporting to use the resolved full path instead of the short command name (was showing blank version strings).
 
-### `setup-runbook-windows.md` — moved manual sign-ins to end
+### `windows-setup-runbook.md` — moved manual sign-ins to end
 
 The manual sign-in steps for GitHub Desktop, Chrome, and Windows Terminal were in the middle of the runbook, interrupting the automated flow with a prompt. Moved them to a new "Post-Setup Manual Checklist" section at the end so the entire automated portion (dev tools, Oh My Posh, micromamba) runs without stopping. Updated the status tracker template to match the new order.

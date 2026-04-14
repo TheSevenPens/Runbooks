@@ -81,7 +81,7 @@ fi
 # --- Check: micromamba (should NOT be present on macOS) ---
 #
 # macOS uses miniconda instead of micromamba because of a libmamba codesign
-# bug on macOS 26 (see macos_micromamba_debug_runbook.md). If micromamba is
+# bug on macOS 26 (see mac-micromamba-debug-runbook.md). If micromamba is
 # detected, warn and recommend removal via scripts/mac/remove-micromamba.sh.
 
 mm_found=false

@@ -5,7 +5,7 @@
 > **One-line root cause:** `libmamba::codesign()` fork/execs `/usr/bin/codesign` via `reproc::run()` with `reproc::env::empty`. On macOS 26, reproc returns `EINVAL` from that spawn even though `/usr/bin/codesign` actually runs to completion and correctly ad-hoc signs the file. libmamba then throws `"Could not codesign executable: " + strerror(EINVAL)` based on reproc's error code and aborts the install — even though the file on disk is already validly signed. Source: `libmamba/src/core/util_os.cpp::codesign()`. **Still present on libmamba `main` as of 2026-04-08 — not fixed upstream.**
 >
 > **Confirmed broken environments:**
-> - macOS 26.4 (25E246) / Apple M4 Pro / CLT 26.4.0 / brewed micromamba 2.5.0 (TheSevenPens machine — setup-runbook-mac run)
+> - macOS 26.4 (25E246) / Apple M4 Pro / CLT 26.4.0 / brewed micromamba 2.5.0 (TheSevenPens machine — mac-setup-runbook run)
 > - macOS 26.3.1 (25D2128) / Apple M4 Pro / CLT 26.3.0 / brewed micromamba 2.5.0_3 (sevenpens / lorient.charydishome — this runbook was executed here)
 >
 > Both machines fail with the exact same error on the very first Mach-O binary of the linking phase. The failure is machine-independent on macOS 26 — it is **not** a machine-specific quirk.
@@ -16,7 +16,7 @@
 >
 > **Current purpose of this runbook:** (1) A reproducible data-collection script that any Claude can run on any mac to confirm the bug and capture a clean fingerprint. (2) Living evidence for an upstream bug report. (3) A place to record per-libmamba-release retries so we can detect when the bug is fixed.
 >
-> **How to use this with Claude Code:** Open Claude Code on any macOS 26 machine where you want to verify / re-verify the bug and say: *"Follow macos_micromamba_debug_runbook.md end to end. Run every command, fill in the Results blocks in place (or add a dated second run below the existing ones), and commit the updated runbook. If any command needs sudo and I haven't granted it, note that in the Results block and continue."*
+> **How to use this with Claude Code:** Open Claude Code on any macOS 26 machine where you want to verify / re-verify the bug and say: *"Follow mac-micromamba-debug-runbook.md end to end. Run every command, fill in the Results blocks in place (or add a dated second run below the existing ones), and commit the updated runbook. If any command needs sudo and I haven't granted it, note that in the Results block and continue."*
 >
 > **Known unknowns / next probes:** See Section 15h "Open questions."
 
@@ -962,7 +962,7 @@ Commit the updated runbook so the broken-mac side can pull and compare.
 
 ```bash
 cd <path to Runbooks repo on this machine>
-git add macos_micromamba_debug_runbook.md
+git add mac-micromamba-debug-runbook.md
 git commit -m "debug: fingerprint from working micromamba mac"
 git push
 ```

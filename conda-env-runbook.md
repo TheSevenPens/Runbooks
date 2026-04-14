@@ -7,13 +7,13 @@
 > | Platform | Environment manager | Why |
 > |---|---|---|
 > | Windows | **micromamba** | Standard. Fast, single binary, works reliably. |
-> | macOS | **miniconda** | micromamba's `libmamba::codesign()` fails with `Could not codesign executable: Invalid argument` during the linking phase on macOS 26 due to a `reproc::env::empty` bug. Confirmed broken on macOS 26.3.1 and 26.4. Not fixed upstream. See [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15 for the full root-cause writeup. |
+> | macOS | **miniconda** | micromamba's `libmamba::codesign()` fails with `Could not codesign executable: Invalid argument` during the linking phase on macOS 26 due to a `reproc::env::empty` bug. Confirmed broken on macOS 26.3.1 and 26.4. Not fixed upstream. See [mac-micromamba-debug-runbook.md](mac-micromamba-debug-runbook.md) Section 15 for the full root-cause writeup. |
 >
-> **Prerequisites (Windows):** see [setup-runbook-windows.md](setup-runbook-windows.md).
+> **Prerequisites (Windows):** see [windows-setup-runbook.md](windows-setup-runbook.md).
 > - **Git for Windows** — provides `git` CLI and Git Credential Manager
 > - **winget** — ships with Windows 11; on Windows 10, install via Microsoft Store
 >
-> **Prerequisites (macOS):** see [setup-runbook-mac.md](setup-runbook-mac.md).
+> **Prerequisites (macOS):** see [mac-setup-runbook.md](mac-setup-runbook.md).
 > - **Homebrew** — used to install Miniconda
 > - **Git** — install via Homebrew (recommended) or use Apple Git from Xcode CLI tools
 >
@@ -373,8 +373,8 @@ Present results to the user in this format:
 
 | Issue | Fix |
 |---|---|
-| Why does macOS use miniconda instead of micromamba? | libmamba 2.5.0's `codesign()` fork/execs `/usr/bin/codesign` via `reproc::run()` with `reproc::env::empty`. On macOS 26, reproc returns `EINVAL` from that spawn even though `codesign` actually runs and correctly ad-hoc signs the file. libmamba checks reproc's `ec` rather than codesign's exit code and throws `Could not codesign executable: Invalid argument`, aborting the install. Confirmed broken on 26.3.1 and 26.4; not fixed on libmamba `main`. Full root-cause writeup and reproducer: [macos_micromamba_debug_runbook.md](macos_micromamba_debug_runbook.md) Section 15. |
-| Is the macOS libmamba bug still broken? | Re-run `macos_micromamba_debug_runbook.md` Section 7 on any macOS machine after a `brew upgrade micromamba` or a macOS point release. If it now succeeds, the upstream bug is likely fixed and macOS can return to micromamba. |
+| Why does macOS use miniconda instead of micromamba? | libmamba 2.5.0's `codesign()` fork/execs `/usr/bin/codesign` via `reproc::run()` with `reproc::env::empty`. On macOS 26, reproc returns `EINVAL` from that spawn even though `codesign` actually runs and correctly ad-hoc signs the file. libmamba checks reproc's `ec` rather than codesign's exit code and throws `Could not codesign executable: Invalid argument`, aborting the install. Confirmed broken on 26.3.1 and 26.4; not fixed on libmamba `main`. Full root-cause writeup and reproducer: [mac-micromamba-debug-runbook.md](mac-micromamba-debug-runbook.md) Section 15. |
+| Is the macOS libmamba bug still broken? | Re-run `mac-micromamba-debug-runbook.md` Section 7 on any macOS machine after a `brew upgrade micromamba` or a macOS point release. If it now succeeds, the upstream bug is likely fixed and macOS can return to micromamba. |
 | `conda create` complains about Anaconda ToS | Conda now prompts to accept Terms of Service for `repo.anaconda.com/pkgs/main` and `pkgs/r`. This repo only uses conda-forge; Section 1c configures conda to drop defaults entirely, and `scripts/mac/create-env.sh` re-applies that config on every run and passes `--override-channels` to force conda-forge only. |
 | Conda init modifies `~/.zshrc` and `~/.bash_profile` | Expected. `conda init zsh bash` writes `# >>> conda initialize >>>` blocks to both. `scripts/mac/remove-micromamba.sh` correctly removes the *mamba* block without touching the conda block. |
 

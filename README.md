@@ -11,7 +11,7 @@ On a fresh machine, run the bootstrap script to install Claude Code, Git, and cl
 Open PowerShell and run:
 
 ```powershell
-irm https://gist.githubusercontent.com/TheSevenPens/a34bb99fceb9637c863a9af02c16a0d3/raw/bootstrap-windows.ps1 | iex
+irm https://raw.githubusercontent.com/TheSevenPens/Runbooks/master/bootstrap/bootstrap-windows.ps1 | iex
 ```
 
 This installs Git and Claude Code, then clones the repo to `~/Documents/GitHub/Runbooks`.
@@ -21,7 +21,7 @@ This installs Git and Claude Code, then clones the repo to `~/Documents/GitHub/R
 Open Terminal and run:
 
 ```bash
-bash -c "$(curl -fsSL https://gist.githubusercontent.com/TheSevenPens/88c13a268be90b8dc723cd9a2d5b069f/raw/bootstrap-mac.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/TheSevenPens/Runbooks/master/bootstrap/bootstrap-mac.sh)"
 ```
 
 This installs Homebrew, PowerShell 7, Claude Code, and clones the repo to `~/Documents/GitHub/Runbooks`.
@@ -35,7 +35,7 @@ claude
 
 Then tell Claude which runbook to follow:
 
-- **Machine setup:** `setup-runbook-windows.md` or `setup-runbook-mac.md`
+- **Machine setup:** `windows-setup-runbook.md` or `mac-setup-runbook.md`
 - **Tool versions (mise):** `mise-env-runbook.md`
 - **Tool versions (conda):** `conda-env-runbook.md`
 

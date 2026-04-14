@@ -7,11 +7,11 @@ A collection of runbooks for setting up development machines from scratch. The r
 ## Repo structure
 
 ```
-setup-runbook-windows.md             — Windows machine setup (apps, tools, shell config)
-setup-runbook-mac.md                 — macOS machine setup (apps, tools, shell config)
+windows-setup-runbook.md             — Windows machine setup (apps, tools, shell config)
+mac-setup-runbook.md                 — macOS machine setup (apps, tools, shell config)
 mise-env-runbook.md                  — Tool version management via mise (cross-platform)
 conda-env-runbook.md                 — Legacy environment runbook (conda/micromamba)
-macos_micromamba_debug_runbook.md    — Root-cause writeup for the macOS libmamba codesign bug
+mac-micromamba-debug-runbook.md    — Root-cause writeup for the macOS libmamba codesign bug
 docs/FUTURES.md                      — Planned improvements and architectural decisions
 apps/                                — Declarative app specs (winget JSON, Brewfile)
 bootstrap/                           — One-liner bootstrap scripts for fresh machines
@@ -45,14 +45,14 @@ These caused real issues during development and are documented in the runbooks, 
 
 ## User preferences
 
-- **Env manager is platform-specific: micromamba on Windows, miniconda on macOS.** On macOS, conda replaces micromamba because of a libmamba `codesign()` bug on macOS 26 (`reproc::env::empty` causes a spurious EINVAL during env creation — full root cause in `macos_micromamba_debug_runbook.md` Section 15, not fixed upstream). Do not install micromamba on macOS; do not install conda on Windows. If `verify-prerequisites.sh` detects the wrong manager for the platform, the runbook removes it via `scripts/mac/remove-micromamba.sh` (on macOS) or `scripts/windows/remove-conda.ps1` (on Windows) before installing the correct one. If the upstream libmamba bug is ever fixed, macOS can return to micromamba — the trigger is a successful run of `macos_micromamba_debug_runbook.md` Section 7.
+- **Env manager is platform-specific: micromamba on Windows, miniconda on macOS.** On macOS, conda replaces micromamba because of a libmamba `codesign()` bug on macOS 26 (`reproc::env::empty` causes a spurious EINVAL during env creation — full root cause in `mac-micromamba-debug-runbook.md` Section 15, not fixed upstream). Do not install micromamba on macOS; do not install conda on Windows. If `verify-prerequisites.sh` detects the wrong manager for the platform, the runbook removes it via `scripts/mac/remove-micromamba.sh` (on macOS) or `scripts/windows/remove-conda.ps1` (on Windows) before installing the correct one. If the upstream libmamba bug is ever fixed, macOS can return to micromamba — the trigger is a successful run of `mac-micromamba-debug-runbook.md` Section 7.
 - Wants runbooks that work on **both Windows and macOS**. Platform-specific setup runbooks stay separate; `conda-env-runbook.md` is the shared environment runbook with per-platform sections (Windows → micromamba, macOS → miniconda).
 - Wants deterministic steps to eventually become **standalone scripts** (idempotent, structured output, no interactivity). See docs/FUTURES.md.
 - Wants runbooks to be **living documents** — when you hit a problem and find a fix, update the runbook so the next run doesn't hit it again.
 
 ## File encoding rules
 
-These rules exist because PowerShell 5.1 and bash have incompatible encoding requirements, and getting them wrong causes silent failures that are hard to diagnose. See `setup-runbook-windows.md` "First-Run Discoveries" items 2 and 6, and `mise-env-runbook.md` items 3 and the BOM known issue for the full incident history.
+These rules exist because PowerShell 5.1 and bash have incompatible encoding requirements, and getting them wrong causes silent failures that are hard to diagnose. See `windows-setup-runbook.md` "First-Run Discoveries" items 2 and 6, and `mise-env-runbook.md` items 3 and the BOM known issue for the full incident history.
 
 ### The core conflict
 

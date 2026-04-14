@@ -24,7 +24,7 @@ FAIL_COUNT=0
 # --- Pre-flight: Homebrew must be available ---
 
 if ! command -v brew &>/dev/null; then
-    echo "FAIL: brew not found — install Homebrew first (see Section 1 of setup-runbook-mac.md)"
+    echo "FAIL: brew not found — install Homebrew first (see Section 1 of mac-setup-runbook.md)"
     exit 1
 fi
 

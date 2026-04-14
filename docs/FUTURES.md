@@ -13,8 +13,8 @@ These were previously planned and are now implemented.
 Three-file structure is in place:
 
 ```
-setup-runbook-windows.md    — Windows-specific installs & config
-setup-runbook-mac.md        — macOS-specific installs & config (brew, zsh, iTerm, etc.)
+windows-setup-runbook.md    — Windows-specific installs & config
+mac-setup-runbook.md        — macOS-specific installs & config (brew, zsh, iTerm, etc.)
 conda-env-runbook.md        — Shared, with platform-specific callouts where needed
 ```
 
@@ -223,7 +223,7 @@ This idea is to drop the conda ecosystem from the runbook entirely and standardi
 
 - Mature: 1.0+, actively developed, used in real production environments.
 - Genuinely cross-platform: native Windows, native macOS, native Linux (including Fedora). One install story per platform, one CLI, one config format.
-- Does not use `libmamba` or `reproc`, so it cannot hit the bug tracked in `macos_micromamba_debug_runbook.md` or anything in that family.
+- Does not use `libmamba` or `reproc`, so it cannot hit the bug tracked in `mac-micromamba-debug-runbook.md` or anything in that family.
 - Uses `conda-forge` for nothing, so the Anaconda ToS dance and `conda config --override-channels` workarounds disappear.
 - Small (~15 MB binary). No Python runtime. No metadata cache.
 - Plugin ecosystem covers `nodejs`, `python`, `gh`, and ~400+ other common tools via mise's own and asdf-compatible plugins.
@@ -371,7 +371,7 @@ Also updated:
 - `verify-prerequisites.ps1`: Removed `.bash_profile` BOM check and MAMBA_EXE consistency check
 - `conda-env-runbook.md`: Removed Git Bash from Windows shell matrix and checklist
 - `mise-env-runbook.md`: Removed Windows Git Bash section, updated test matrix and checklist
-- `setup-runbook-windows.md`: Updated Git for Windows note
+- `windows-setup-runbook.md`: Updated Git for Windows note
 - `CLAUDE.md`: Updated key lessons and encoding rules (bash concern now macOS-only)
 
 ### Runbook diffing between machines

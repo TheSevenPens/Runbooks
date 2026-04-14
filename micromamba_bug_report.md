@@ -132,4 +132,4 @@ micromamba create -n repro2 -c conda-forge libffi -y
 - Upstream fix in progress: [`DaanDeMeyer/reproc#103` — "Only close open file descriptors"](https://github.com/DaanDeMeyer/reproc/pull/103) (OPEN, not merged)
 - Related long-running symptom thread: [`conda-forge/miniforge#324`](https://github.com/conda-forge/miniforge/issues/324) (OPEN since 2022)
 - Our draft for reproc#82: `reproc_bug_report.md` in this repo
-- Our full investigation: `macos_micromamba_debug_runbook.md` Section 15
+- Our full investigation: `mac-micromamba-debug-runbook.md` Section 15

@@ -3,7 +3,7 @@
 #
 # On macOS this repo uses miniconda, not micromamba, because of a libmamba
 # codesign bug on macOS 26 that aborts `micromamba create` during the
-# linking phase. See macos_micromamba_debug_runbook.md for root cause.
+# linking phase. See mac-micromamba-debug-runbook.md for root cause.
 # This script is the inverse of remove-conda.sh: it removes any existing
 # micromamba install so we can switch to miniconda.
 #

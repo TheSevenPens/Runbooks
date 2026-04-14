@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # bootstrap-mac.sh -- Bootstrap a fresh macOS machine for the Runbooks repo
 #
-# Usage (one-liner from gist):
-#   bash -c "$(curl -fsSL <gist-raw-url>)"
+# Usage (one-liner from GitHub):
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/TheSevenPens/Runbooks/master/bootstrap/bootstrap-mac.sh)"
 #
 # Installs Homebrew, PowerShell 7, Claude Code, and clones the Runbooks repo.
 # Each step is idempotent -- already-installed tools are skipped.
@@ -135,7 +135,6 @@ if [[ -d "$CLONE_DIR/.git" ]]; then
 else
     mkdir -p "$(dirname "$CLONE_DIR")"
     echo "INFO: Cloning $REPO_URL to $CLONE_DIR..."
-    echo "INFO: The repo is private -- Git Credential Manager will open a browser for GitHub auth"
 
     if git clone "$REPO_URL" "$CLONE_DIR" 2>&1; then
         echo "OK: Repo cloned successfully"
@@ -169,5 +168,5 @@ else
     echo "  cd $CLONE_DIR"
     echo "  $claude_cmd"
     echo ""
-    echo "  Then tell Claude: \"Follow the setup runbook at setup-runbook-mac.md\""
+    echo "  Then tell Claude: \"Follow the setup runbook at mac-setup-runbook.md\""
 fi

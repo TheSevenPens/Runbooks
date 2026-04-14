@@ -234,7 +234,6 @@ if (Test-Path (Join-Path $CloneDir '.git')) {
     }
 
     Write-Host "Cloning $RepoUrl to $CloneDir..." -ForegroundColor Cyan
-    Write-Host "(The repo is private -- Git Credential Manager will open a browser window for GitHub auth)" -ForegroundColor Yellow
 
     # git writes progress to stderr, which PowerShell treats as an error
     # under $ErrorActionPreference = 'Stop'. Temporarily relax it.
@@ -280,12 +279,12 @@ if ($FailCount -gt 0) {
     } else {
         Write-Host "  claude" -ForegroundColor White
         Write-Host ""
-        Write-Host "Then tell Claude: ""Follow the setup runbook at setup-runbook-windows.md""" -ForegroundColor White
+        Write-Host "Then tell Claude: ""Follow the setup runbook at windows-setup-runbook.md""" -ForegroundColor White
         return
     }
 
     Write-Host "  $claudeCmd" -ForegroundColor White
     Write-Host ""
-    Write-Host "Then tell Claude: ""Follow the setup runbook at setup-runbook-windows.md""" -ForegroundColor White
+    Write-Host "Then tell Claude: ""Follow the setup runbook at windows-setup-runbook.md""" -ForegroundColor White
     return
 }

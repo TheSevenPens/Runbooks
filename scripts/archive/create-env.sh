@@ -2,7 +2,7 @@
 # create-env.sh — Create a conda environment with specified packages (idempotent)
 #
 # On macOS this repo uses miniconda (not micromamba) because of a libmamba
-# codesign bug on macOS 26. See macos_micromamba_debug_runbook.md for
+# codesign bug on macOS 26. See mac-micromamba-debug-runbook.md for
 # root cause. The Windows equivalent of this script uses micromamba.
 #
 # Usage:

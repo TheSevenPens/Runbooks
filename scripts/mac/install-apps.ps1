@@ -18,7 +18,7 @@ $FailCount = 0
 
 # --- Pre-flight: Homebrew ---
 if (-not (Get-Command brew -ErrorAction SilentlyContinue)) {
-    Write-Host "FAIL: brew not found -- install Homebrew first (see setup-runbook-mac.md)" -ForegroundColor Red
+    Write-Host "FAIL: brew not found -- install Homebrew first (see mac-setup-runbook.md)" -ForegroundColor Red
     exit 1
 }
 
