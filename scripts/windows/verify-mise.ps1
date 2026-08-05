@@ -14,6 +14,7 @@
 # Exit code: 0 if all pass, 1 if any fail
 
 . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -110,21 +111,14 @@ function Test-CmdTool {
 
 Write-Host "--- mise installation ---"
 
-$miseExe = Get-Command mise -ErrorAction SilentlyContinue
-if (-not $miseExe) {
-    # Canonical path fallback
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
-        (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { $miseExe = Get-Command $c -ErrorAction SilentlyContinue; break }
-    }
-}
+$miseExePath = MISE_ResolveExe
 
-if ($miseExe) {
-    $miseVersion = STRINGOP_GetToolVersion -ExePath $miseExe.Source -Flag '--version'
-    Write-Host "OK: mise $miseVersion ($($miseExe.Source))"
+if ($miseExePath) {
+    # Child shells spawned below invoke 'mise' by name; make sure the PATH they
+    # inherit can resolve it even if this session's PATH predates the install.
+    MISE_EnsureOnPath -MiseExe $miseExePath
+    $miseVersion = STRINGOP_GetToolVersion -ExePath $miseExePath -Flag '--version'
+    Write-Host "OK: mise $miseVersion ($miseExePath)"
 } else {
     Write-Host "FAIL: mise not found"
     $FailCount++

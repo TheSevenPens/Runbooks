@@ -14,6 +14,7 @@
 # Exit code: 0 on success, 1 on any failure
 
 . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -24,24 +25,19 @@ $ToolSpec = 'node@lts python@3.12 gh@latest'
 
 Write-Host "--- Step 1: Verify mise ---"
 
-$miseExe = Get-Command mise -ErrorAction SilentlyContinue
-if (-not $miseExe) {
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
-        (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { $miseExe = Get-Command $c -ErrorAction SilentlyContinue; break }
-    }
-}
-
-if (-not $miseExe) {
+$miseExePath = MISE_ResolveExe
+if (-not $miseExePath) {
     Write-Host "FAIL: mise not found - run install-mise.ps1 first"
     exit 1
 }
 
-$miseVersion = STRINGOP_GetToolVersion -ExePath $miseExe.Source -Flag '--version'
-Write-Host "OK: mise $miseVersion"
+# The child pwsh processes below invoke 'mise' by name, so it must be on the
+# PATH they inherit from us.  It may not be if mise was installed after this
+# shell started.
+MISE_EnsureOnPath -MiseExe $miseExePath
+
+$miseVersion = STRINGOP_GetToolVersion -ExePath $miseExePath -Flag '--version'
+Write-Host "OK: mise $miseVersion ($miseExePath)"
 
 # --- Step 2: Install tools via activated PS7 ---
 

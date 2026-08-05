@@ -13,6 +13,8 @@
 # Output: Structured lines prefixed with OK / SKIP / FAIL / INFO
 # Exit code: 0 on success, 1 on any failure
 
+. (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
@@ -33,20 +35,10 @@ if (-not $WingetExe) {
 
 Write-Host "--- Step 1: Install mise ---"
 
-$miseExe = Get-Command mise -ErrorAction SilentlyContinue
-if (-not $miseExe) {
-    # Check canonical paths
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
-        (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
-    )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { $miseExe = Get-Command $c -ErrorAction SilentlyContinue; break }
-    }
-}
+$miseExePath = MISE_ResolveExe
 
-if ($miseExe) {
-    $version = & $miseExe.Source --version 2>$null | Select-Object -First 1
+if ($miseExePath) {
+    $version = & $miseExePath --version 2>$null | Select-Object -First 1
     Write-Host "SKIP: mise already installed ($version)"
 } else {
     if (-not $WingetExe) {
@@ -62,15 +54,10 @@ if ($miseExe) {
             # Refresh PATH for this session
             $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                         [Environment]::GetEnvironmentVariable('Path', 'User')
-            $miseExe = Get-Command mise -ErrorAction SilentlyContinue
-            if (-not $miseExe) {
-                foreach ($c in $candidates) {
-                    if (Test-Path $c) { $miseExe = Get-Command $c -ErrorAction SilentlyContinue; break }
-                }
-            }
-            if ($miseExe) {
-                $version = & $miseExe.Source --version 2>$null | Select-Object -First 1
-                Write-Host "OK: mise installed ($version)"
+            $miseExePath = MISE_ResolveExe
+            if ($miseExePath) {
+                $version = & $miseExePath --version 2>$null | Select-Object -First 1
+                Write-Host "OK: mise installed ($version) at $miseExePath"
             } else {
                 Write-Host "FAIL: mise installed but not found on PATH"
                 $FailCount++

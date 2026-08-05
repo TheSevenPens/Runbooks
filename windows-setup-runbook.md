@@ -137,9 +137,20 @@ oh-my-posh font install JetBrainsMono
 
 ---
 
-## Section 8 — Micromamba & Environments
+## Section 8 — Tool Version Manager & Environments
 
-> 📘 **See [conda-env-runbook.md](conda-env-runbook.md)** for all steps related to installing Micromamba, removing Conda (if present), shell configuration, and creating the `node1` environment. This was separated into its own runbook due to the number of platform-specific workarounds involved.
+> 🤔 **Claude Code: Ask the user** which tool manager to use before proceeding — the two paths are mutually exclusive and install different things.
+
+Two runbooks cover this step. Pick one:
+
+| Path | Runbook | Notes |
+|---|---|---|
+| **mise** (recommended) | [mise-env-runbook.md](mise-env-runbook.md) | Cross-platform tool version manager. Installs `node`, `python`, and `gh` directly — no libmamba, shell hooks, or per-platform manager split. Automated end-to-end on Windows via `install-mise.ps1` → `install-mise-tools.ps1` → `verify-mise.ps1`. |
+| **micromamba** (legacy) | [conda-env-runbook.md](conda-env-runbook.md) | Installing Micromamba, removing Conda (if present), shell configuration, and creating the `node1` environment. Carries more Windows-specific workarounds. |
+
+Both were separated into their own runbooks due to the number of platform-specific workarounds involved. See `docs/FUTURES.md` for the rationale behind the mise migration.
+
+> ⚠️ **Claude Code note:** `fix-path-registry.ps1` unconditionally adds the micromamba directory to PATH (step 3), so do **not** run it on a mise machine. On the mise path, `install-mise.ps1` step 4 already rewrites `HKCU\Environment\Path` as `REG_EXPAND_SZ`, which repairs a `REG_SZ` PATH as a side effect.
 
 ---
 
@@ -169,7 +180,10 @@ oh-my-posh font install JetBrainsMono
 | Em-dash characters in PS scripts cause parse errors | PowerShell 5.1 cannot parse UTF-8 files containing non-ASCII characters (like `---`) unless the file has a BOM. Scripts must use only ASCII characters. See `CLAUDE.md` "File encoding rules" for the full policy. |
 | PS5.1 `-Encoding UTF8` adds BOM, breaking bash files | PowerShell 5.1's `Set-Content -Encoding UTF8` and `Add-Content -Encoding UTF8` always add a UTF-8 BOM (`EF BB BF`). Bash interprets these bytes as part of the first command, producing `$'\357\273\277eval': command not found`. PS7 does **not** add a BOM. Since scripts may run under either version, never use `-Encoding UTF8` when writing files that bash reads. Use `[System.IO.File]::WriteAllText()` instead. `verify-prerequisites.ps1` now checks `.bash_profile` and `.bashrc` for accidental BOMs. |
 | Micromamba installer downloads x86-64 binary on ARM64 | The official installer at `micro.mamba.pm/install.ps1` downloads `micromamba-win-64` (x86-64), not a native ARM64 build. It works under Windows x86-64 emulation but is not optimal. No ARM64 build is currently published upstream. |
+| `verify-prerequisites.ps1` crashes with "the value none is not a valid value for the ToolManager variable" | The `-ToolManager` parameter's `[ValidateSet]` stays bound to the variable for the life of the script, so the auto-detect branch could not assign `'none'` back to it. Fixed: detection resolves into a separate `$Manager` variable. |
+| `fix-path-registry.ps1` adds a micromamba PATH entry on mise machines | Step 3 of that script is unconditional. On the mise path, skip it — `install-mise.ps1` writes PATH as `REG_EXPAND_SZ` and fixes a `REG_SZ` type as a side effect. |
 | Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| mise issues | See [mise-env-runbook.md](mise-env-runbook.md) — Notes & Known Issues |
 
 ---
 
@@ -264,7 +278,7 @@ This section documents issues found during the first run of the runbook on a Win
 - [ ] Dev tools installed (install-apps.ps1)
 - [ ] Oh My Posh installed (if chosen)
 - [ ] Oh My Posh font configured (if chosen, manual)
-- [ ] Micromamba setup complete (see conda-env-runbook.md)
+- [ ] Tool manager setup complete (mise-env-runbook.md or conda-env-runbook.md)
 - [ ] GitHub Desktop signed in (manual)
 - [ ] Chrome signed in (manual)
 - [ ] Windows Terminal set as default (manual, optional)

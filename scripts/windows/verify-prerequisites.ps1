@@ -14,30 +14,27 @@ param(
     [string]$ToolManager = "auto"
 )
 
+. (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
+
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
 
 # --- Resolve tool manager ---
-# Auto-detect: check for mise first (newer), then micromamba (legacy)
-if ($ToolManager -eq 'auto') {
-    $hasMise = (Get-Command mise -ErrorAction SilentlyContinue) -ne $null
-    if (-not $hasMise) {
-        $miseCandidates = @(
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
-            (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
-        )
-        foreach ($c in $miseCandidates) {
-            if (Test-Path $c) { $hasMise = $true; break }
-        }
-    }
+# Auto-detect: check for mise first (newer), then micromamba (legacy).
+# NOTE: the resolved value goes in $Manager, not $ToolManager.  The
+# [ValidateSet] attribute stays attached to the parameter variable for the
+# life of the script, so assigning 'none' back to $ToolManager throws.
+$Manager = $ToolManager
+if ($Manager -eq 'auto') {
+    $hasMise = (MISE_ResolveExe) -ne ''
     $hasMamba = (Test-Path "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe") -or
                 ((Get-Command micromamba -ErrorAction SilentlyContinue) -ne $null)
 
-    if ($hasMise) { $ToolManager = 'mise' }
-    elseif ($hasMamba) { $ToolManager = 'micromamba' }
-    else { $ToolManager = 'none' }
+    if ($hasMise) { $Manager = 'mise' }
+    elseif ($hasMamba) { $Manager = 'micromamba' }
+    else { $Manager = 'none' }
 }
-Write-Host "INFO: Tool manager: $ToolManager"
+Write-Host "INFO: Tool manager: $Manager"
 
 # --- OneDrive Documents redirection check ---
 $docsDir = [Environment]::GetFolderPath('MyDocuments')
@@ -156,22 +153,13 @@ Test-CliTool -Name "pwsh" -Command "pwsh" -Required $false
 
 # --- Tool manager checks ---
 
-if ($ToolManager -eq 'mise') {
+if ($Manager -eq 'mise') {
     # --- mise checks ---
 
-    $miseCmd = Get-Command mise -ErrorAction SilentlyContinue
-    if (-not $miseCmd) {
-        $miseCandidates = @(
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'),
-            (Join-Path $env:LOCALAPPDATA 'mise\bin\mise.exe')
-        )
-        foreach ($c in $miseCandidates) {
-            if (Test-Path $c) { $miseCmd = Get-Command $c -ErrorAction SilentlyContinue; break }
-        }
-    }
-    if ($miseCmd) {
-        $miseVer = & $miseCmd.Source --version 2>$null | Select-Object -First 1
-        Write-Host "OK: mise $miseVer ($($miseCmd.Source))"
+    $miseExePath = MISE_ResolveExe
+    if ($miseExePath) {
+        $miseVer = & $miseExePath --version 2>$null | Select-Object -First 1
+        Write-Host "OK: mise $miseVer ($miseExePath)"
     } else {
         Write-Host "FAIL: mise not found"
         $FailCount++
@@ -212,7 +200,7 @@ if ($ToolManager -eq 'mise') {
         Write-Host "WARN: mise global config not found - run install-mise-tools.ps1"
     }
 
-} elseif ($ToolManager -eq 'micromamba') {
+} elseif ($Manager -eq 'micromamba') {
     # --- Micromamba (check canonical path first) ---
 
     $mmCanonical = "$env:USERPROFILE\AppData\Local\micromamba\micromamba.exe"
@@ -323,7 +311,7 @@ if ($regKey) {
 
 # --- Optional: Environment packages (micromamba only) ---
 
-if ($Env -ne "" -and $ToolManager -eq 'micromamba' -and $mmExe) {
+if ($Env -ne "" -and $Manager -eq 'micromamba' -and $mmExe) {
     Write-Host ""
     Write-Host "--- Environment: $Env ---"
 
