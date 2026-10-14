@@ -1,5 +1,16 @@
 # Change History
 
+## 2026-10-14 — Claude Code guidance installed machine-wide
+
+The shim guidance from the previous change lived only in this repo's `CLAUDE.md`, which Claude Code reads only inside this repo --- not in the other projects where the orphans piled up. Re-running the runbook also changed nothing on an existing machine.
+
+### New: `scripts/windows/install-claude-guidance.ps1`
+- Idempotently installs `scripts/windows/claude-guidance-mise-shims.md` into `%USERPROFILE%\.claude\CLAUDE.md` between BEGIN/END markers (append / replace if changed / skip if current), filling in this machine's Runbooks path. Preserves content outside the markers and the file's line endings; writes UTF-8 without BOM. `-Remove` deletes the block.
+
+### Docs
+- `mise-env-runbook.md` Section 5: new step, Known Issues row, discovery note, checklist item.
+- `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/FUTURES.md`: references.
+
 ## 2026-10-14 — Orphaned mise shim processes
 
 During a long Claude Code session on Windows the machine became unresponsive with hundreds of `python.exe` and `mise.exe` processes. Cause: each mise shim call on Windows is a three-process chain (shim → `mise.exe` → real tool), Claude Code's Bash tool goes through shims, and Windows doesn't kill children with their parent, so every timed-out or stopped command left two processes behind. Full writeup in `mise-env-runbook.md` "Third-Run Discoveries".
