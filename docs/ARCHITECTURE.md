@@ -28,7 +28,7 @@ docs/FUTURES.md                — Roadmap and planned improvements
 2. `install-apps.ps1` — Git, GitHub Desktop, VS Code, Chrome, Terminal, PowerShell 7
 3. Oh My Posh (optional, prompted)
 4. Tool setup (pick one):
-   - **mise path** (`mise-env-runbook.md`): `install-mise.ps1`, `install-mise-tools.ps1`
+   - **mise path** (`mise-env-runbook.md`): `install-mise.ps1`, `install-mise-tools.ps1`, `install-claude-guidance.ps1`
    - **conda path** (`conda-env-runbook.md`): `remove-conda.ps1`, micromamba install, `fix-path-registry.ps1`, `micromamba-shell-init.ps1`, `create-env.ps1`
 5. Verify with `verify-mise.ps1` (mise path) or `verify-shell-integration.ps1` (conda path)
 6. Post-setup manual sign-ins (GitHub Desktop, Chrome)

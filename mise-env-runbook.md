@@ -341,6 +341,18 @@ Who goes through shims:
 > 2. **Stop process trees, not processes.** When you stop a server, watcher or hung command you started, kill the whole tree. From Git Bash: `taskkill //PID <pid> //T //F` (double slashes stop MSYS from rewriting the switches as paths). From PowerShell: `taskkill /PID <pid> /T /F`.
 > 3. **Check for orphans after any command times out or is interrupted, and before ending a long session** --- run the script below and tell the user what it found before using `-Kill`.
 
+### Install the guidance for Claude Code (all projects)
+
+The rules above only reach Claude Code while it works inside this repo, because this repo's `CLAUDE.md` is project-scoped. The orphaned processes happen in *other* projects. This step copies the rules into the user-level memory file, `%USERPROFILE%\.claude\CLAUDE.md`, which Claude Code reads in every project.
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-claude-guidance.ps1
+```
+
+> 📝 **Note:** The script owns only the text between its `BEGIN runbooks:mise-shims` / `END runbooks:mise-shims` markers. It appends the block if absent, replaces it if the template (`scripts/windows/claude-guidance-mise-shims.md`) has changed, and skips it if current. Your own content in that file is untouched. The block includes this machine's Runbooks path so the orphan-check command works from any project. `-Remove` takes the block out. It takes effect in new Claude Code sessions.
+
+> ⚠️ **Claude Code note:** Run this on every Windows mise machine, including ones set up before this step existed --- it is the part of the shim fix that actually changes the machine. Re-run it after pulling Runbooks changes to the template or after moving the Runbooks clone.
+
 ### Find and stop orphans
 
 ```bash
@@ -383,6 +395,7 @@ The script lists `python`/`pythonw`/`mise`/`node` processes, groups them by comm
 | `python` launches Microsoft Store instead of mise python | Windows ships App Execution Aliases that redirect `python.exe` to the Microsoft Store. These stubs at `WindowsApps\python.exe` may take priority over mise's PATH entries. Fix: Settings > Apps > Advanced app settings > App execution aliases > turn off `python.exe` and `python3.exe`. |
 | Hundreds of `python.exe` and `mise.exe` processes; desktop slow or unresponsive | Orphaned shim chains. On Windows each shim call is `python.exe` (shim) → `mise.exe` → `python.exe` (real), and killing the top doesn't kill the rest. Run `scripts/windows/find-orphan-tool-processes.ps1` to see which command line multiplied, then `-Kill` to stop the orphan trees. Prevention: Section 5 (call `mise which python` once and use that path from non-PowerShell callers; stop process trees, not processes). |
 | Runbook scripts hang past their timeout, or leave child processes running | Scripts read child output with a blocking `ReadToEnd()` before `WaitForExit(timeout)`, so the timeout never fired, and `Process.Kill()` only killed the direct child. Fixed: `install-mise-tools.ps1`, `verify-mise.ps1` and `verify-shell-integration.ps1` now use `PROC_Invoke` from `scripts/shared/process-helpers.ps1`, which reads output asynchronously and stops the whole tree on timeout. |
+| Shim guidance in this repo's `CLAUDE.md` doesn't help in other projects | Project `CLAUDE.md` files are only read inside that project, and the orphans pile up while Claude Code works elsewhere. Fixed: `install-claude-guidance.ps1` installs the rules into the user-level `%USERPROFILE%\.claude\CLAUDE.md` (Section 5). |
 | Switching `windows_shim_mode` to `hardlink`/`symlink` to avoid the extra `mise.exe` | Doesn't help. In those modes the shim *is* `mise.exe`, so it still launches the real tool as a child. Keep the default `exe` mode. |
 
 ---
@@ -398,6 +411,7 @@ The script lists `python`/`pythonw`/`mise`/`node` processes, groups them by comm
 **Fix:**
 - Section 5 (new) documents the shim process chain and adds Claude Code rules: resolve `mise which python` once and call that path, stop process trees with `taskkill /T`, and check for orphans after timeouts and before ending long sessions.
 - New script `scripts/windows/find-orphan-tool-processes.ps1` reports orphaned `python`/`mise`/`node` processes grouped by command line, and stops them with `-Kill`.
+- Follow-up: that guidance was only in this repo's project-scoped `CLAUDE.md`, so it never reached Claude Code in other projects --- where the incident happened. New script `scripts/windows/install-claude-guidance.ps1` installs it into the user-level `%USERPROFILE%\.claude\CLAUDE.md`, so re-running the runbook on an existing machine applies the fix.
 - The runbook's own scripts had the same bug on a small scale (blocking `ReadToEnd()` before `WaitForExit`, then `Kill()` on the direct child only). They now share `PROC_Invoke` in `scripts/shared/process-helpers.ps1`.
 
 ---
@@ -503,6 +517,7 @@ The runbook noted there's no `remove-micromamba.ps1` script. Removal required: d
 - [ ] Terminal restarted
 - [ ] Tools installed (install-mise-tools.ps1)
 - [ ] Shell integration verified (verify-mise.ps1, table shown to user)
+- [ ] Claude Code guidance installed (install-claude-guidance.ps1)
 - [ ] No orphaned tool processes (find-orphan-tool-processes.ps1)
 ```
 
