@@ -222,13 +222,19 @@ if ($MinicondaDir -ne $expectedMinicondaDir) {
     Write-Host "FAIL: MinicondaDir is empty - refusing to delete"
     $FailCount++
 } elseif (Test-Path $MinicondaDir) {
-    # Verify it actually looks like a conda installation
+    # Verify it actually looks like a conda installation. A winget/silent uninstall can
+    # leave only the installer's own files behind (Uninstall-Miniconda3.exe, pre_uninstall.bat,
+    # _conda.exe, install.log), so those count as proof too.
     $looksLikeConda = (Test-Path "$MinicondaDir\conda-meta") -or
                       (Test-Path "$MinicondaDir\Scripts\conda.exe") -or
-                      (Test-Path "$MinicondaDir\pkgs")
+                      (Test-Path "$MinicondaDir\pkgs") -or
+                      (Test-Path "$MinicondaDir\Uninstall-Miniconda3.exe") -or
+                      (Test-Path "$MinicondaDir\pre_uninstall.bat") -or
+                      (Test-Path "$MinicondaDir\_conda.exe")
     if (-not $looksLikeConda) {
         Write-Host "FAIL: $MinicondaDir exists but does not look like a conda installation"
-        Write-Host "  Expected to find conda-meta, Scripts\conda.exe, or pkgs directory"
+        Write-Host "  Expected to find conda-meta, pkgs, Scripts\conda.exe, or uninstaller leftovers"
+        Write-Host "  (Uninstall-Miniconda3.exe, pre_uninstall.bat, _conda.exe)"
         Write-Host "  Refusing to delete - inspect the directory manually"
         $FailCount++
     } else {
