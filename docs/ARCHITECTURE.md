@@ -15,6 +15,7 @@ conda-env-runbook.md           — Conda/micromamba env setup (legacy, per-platf
 mise-env-runbook.md            — Tool version management via mise (cross-platform)
 scripts/windows/*.ps1          — PowerShell automation scripts
 scripts/mac/*.sh               — Bash automation scripts
+scripts/shared/*.ps1           — Shared helpers (STRINGOP_, MISE_, PROC_) dot-sourced by scripts
 docs/                          — Architecture and change history
 CLAUDE.md                      — Operator guide for Claude Code
 docs/FUTURES.md                — Roadmap and planned improvements
@@ -170,6 +171,22 @@ PS5.1 defaults to the system's ANSI codepage when reading scripts without a Byte
 
 1. **Avoid non-ASCII characters** in `.ps1` files (use `--` instead of `—`, ASCII quotes instead of curly quotes)
 2. **Save with UTF-8 BOM** if non-ASCII is unavoidable. Also add `-Encoding UTF8` to any `Set-Content` / `Add-Content` calls that write profile files
+
+### Killing a process does not kill its children
+
+Windows has no process groups in the Unix sense: `Process.Kill()` and `Stop-Process` stop exactly one process, and its children keep running with a dead parent. This matters most with mise shims, where every call is a three-process chain (shim → `mise.exe` → real tool) --- see `mise-env-runbook.md` Section 5. To stop a whole tree, use `taskkill /PID <pid> /T /F` (`PROC_StopTree`).
+
+### Spawning child processes: use `PROC_Invoke`
+
+Scripts that run a child shell and capture its output must use `PROC_Invoke` from `scripts/shared/process-helpers.ps1`. The pattern it replaces:
+
+```powershell
+$stdout = $proc.StandardOutput.ReadToEnd()   # blocks until the pipe closes
+$exited = $proc.WaitForExit($TimeoutMs)      # never reached while the child hangs
+if (-not $exited) { $proc.Kill() }           # kills only the direct child
+```
+
+`ReadToEnd()` waits for the pipe to close, which also waits on any grandchild that inherited it, so the timeout never fires. `PROC_Invoke` reads both streams asynchronously, enforces the timeout, stops the whole tree with `taskkill /T` on timeout, and gives up on output after 5 more seconds so a lingering grandchild can't block the caller.
 
 ### Execution policy blocks scripts by default
 

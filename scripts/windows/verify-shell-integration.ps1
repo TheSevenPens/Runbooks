@@ -11,6 +11,7 @@
 # Exit code: 0 if all pass, 1 if any fail
 
 . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\process-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -34,22 +35,11 @@ function Test-ShellActivate {
     }
 
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $exePath.Source
-        $psi.Arguments = $Arguments -join ' '
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
+        $r = PROC_Invoke -FilePath $exePath.Source -Arguments ($Arguments -join ' ') -TimeoutMs $TimeoutMs
+        $stdout = $r.StdOut
+        $stderr = $r.StdErr
 
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
-        $exited = $proc.WaitForExit($TimeoutMs)
-
-        if (-not $exited) {
-            $proc.Kill()
-            $proc.WaitForExit(5000)
+        if ($r.TimedOut) {
             Write-Host "FAIL: $ShellName - timed out after ${TimeoutMs}ms"
             $script:Results += [PSCustomObject]@{ Shell = $ShellName; Status = "FAIL" }
             $script:FailCount++
@@ -120,23 +110,12 @@ try {
 
 if ($autoRun -and $autoRun.Contains('mamba_hook.bat')) {
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "cmd.exe"
-        $psi.Arguments = '/c "micromamba activate base && echo ACTIVATE_OK"'
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
         $cmdTimeout = 30000
-        $exited = $proc.WaitForExit($cmdTimeout)
+        $r = PROC_Invoke -FilePath "cmd.exe" -Arguments '/c "micromamba activate base && echo ACTIVATE_OK"' -TimeoutMs $cmdTimeout
+        $stdout = $r.StdOut
+        $stderr = $r.StdErr
 
-        if (-not $exited) {
-            $proc.Kill()
-            $proc.WaitForExit(5000)
+        if ($r.TimedOut) {
             Write-Host "FAIL: CMD - timed out after ${cmdTimeout}ms"
             $Results += [PSCustomObject]@{ Shell = "CMD"; Status = "FAIL" }
             $FailCount++

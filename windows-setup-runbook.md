@@ -183,6 +183,7 @@ Both were separated into their own runbooks due to the number of platform-specif
 | `verify-prerequisites.ps1` crashes with "the value none is not a valid value for the ToolManager variable" | The `-ToolManager` parameter's `[ValidateSet]` stays bound to the variable for the life of the script, so the auto-detect branch could not assign `'none'` back to it. Fixed: detection resolves into a separate `$Manager` variable. |
 | `fix-path-registry.ps1` adds a micromamba PATH entry on mise machines | Step 3 of that script is unconditional. On the mise path, skip it — `install-mise.ps1` writes PATH as `REG_EXPAND_SZ` and fixes a `REG_SZ` type as a side effect. |
 | Micromamba issues | See [conda-env-runbook.md](conda-env-runbook.md) — Notes & Known Issues |
+| Hundreds of `python.exe` / `mise.exe` processes, machine sluggish | Orphaned mise shim chains. Run `scripts/windows/find-orphan-tool-processes.ps1` (add `-Kill` to stop them). See [mise-env-runbook.md](mise-env-runbook.md) Section 5. |
 | mise issues | See [mise-env-runbook.md](mise-env-runbook.md) — Notes & Known Issues |
 
 ---
