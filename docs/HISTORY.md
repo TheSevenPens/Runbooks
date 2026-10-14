@@ -1,5 +1,11 @@
 # Change History
 
+## 2026-10-14 --- remove-conda.ps1 handles half-uninstalled miniconda3
+
+### Fix: `scripts/windows/remove-conda.ps1`
+- The "looks like a conda installation" check before `Remove-Item -Recurse` also accepts `Uninstall-Miniconda3.exe`, `pre_uninstall.bat`, and `_conda.exe`. A winget uninstall can leave only these plus runtime DLLs, and the old check refused to delete that directory (exit 1). The path-equals-expected and non-empty checks are unchanged.
+- Known Issues row added to `conda-env-runbook.md`.
+
 ## 2026-10-14 — Claude Code guidance installed machine-wide
 
 The shim guidance from the previous change lived only in this repo's `CLAUDE.md`, which Claude Code reads only inside this repo --- not in the other projects where the orphans piled up. Re-running the runbook also changed nothing on an existing machine.
