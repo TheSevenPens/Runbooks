@@ -139,6 +139,8 @@ if (-not $pathValue.Contains('mise\shims')) {
 
 > 📝 **Note:** Shims and activation coexist. In PS7/PS5.1, activation takes priority (shims are on PATH but activation injects the real binaries first). In CMD, shims provide tool access. Run `mise reshim` after installing new tools to regenerate shims.
 
+> 📝 **Note:** On Windows a shim is not free: every call through one runs as **three processes** (`python.exe` shim → `mise.exe` → real `python.exe`), and anything that doesn't load your PowerShell profile goes through shims --- CMD, editors and other GUI apps, scheduled tasks, and Claude Code's Bash tool. If the top of that chain is killed, the other two are orphaned. See Section 5.
+
 ### ~~Windows (Git Bash)~~ --- Dropped
 
 > 📝 **Note:** Git Bash is no longer a supported shell on Windows. `mise activate bash` is broken on Git Bash (it replaces PATH with Windows-style paths, destroying the shell). See `docs/FUTURES.md` "Drop Git Bash as a supported shell on Windows" for the full rationale.
@@ -301,6 +303,60 @@ After `mise doctor` passes, confirm the tools are callable in **every** shell --
 
 ---
 
+## Section 5 --- Day-to-day use on Windows: shims and leftover processes
+
+This section is Windows-only. On macOS and Linux a shim is a symlink to `mise`, which `exec`s the real tool and replaces itself, so there is only ever one process.
+
+### How a shim call runs on Windows
+
+With mise's default `windows_shim_mode = "exe"`, `%LOCALAPPDATA%\mise\shims\python.exe` is a small launcher. It starts `mise.exe`, which resolves the version and starts the real interpreter. Windows has no `exec`, so all three stay alive until the script ends:
+
+```
+python.exe (shim)  →  mise.exe  →  python.exe (real, under %LOCALAPPDATA%\mise\installs\)
+```
+
+Task Manager shows two `python.exe` and one `mise.exe` for a single `python script.py`. Changing `windows_shim_mode` does not help --- in `hardlink`/`symlink` mode the shim *is* `mise.exe` under another name, so the chain is still there.
+
+Who goes through shims:
+
+| Caller | Path to tools | Processes per call |
+|---|---|---|
+| PowerShell 7 / 5.1 with the profile loaded | activation (real binaries first on PATH) | 1 |
+| CMD | shims | 3 |
+| Editors, GUI apps, scheduled tasks | shims (user PATH) | 3 |
+| Claude Code's Bash tool (Git Bash, no PS profile) | shims (user PATH) | 3 |
+| `pwsh -NoProfile` without an explicit `mise activate` | shims (user PATH) | 3 |
+
+### Why processes pile up
+
+**Windows does not kill child processes when their parent is killed.** If the shim at the top of the chain is killed --- a command times out, a background job is stopped, a terminal tab is closed --- `mise.exe` and the real `python.exe` are orphaned and keep running. If the script was stuck (polling, waiting on input, a server), each orphan keeps using CPU and memory. Over a long session this reached hundreds of processes and made the desktop unresponsive (see Third-Run Discoveries below).
+
+> ⚠️ **Claude Code note (Windows):** Your Bash tool resolves `python`, `node` and `gh` to mise shims. To avoid leaving orphans behind:
+> 1. **Call the real binary for anything long-running or repeated.** Resolve it once per session and reuse it --- one process per call instead of three, and nothing to orphan:
+>    ```bash
+>    PY="$(mise which python)"; NODE="$(mise which node)"
+>    "$PY" script.py
+>    ```
+>    For a whole job, `mise exec -- <command>` resolves the environment once for everything it runs.
+> 2. **Stop process trees, not processes.** When you stop a server, watcher or hung command you started, kill the whole tree. From Git Bash: `taskkill //PID <pid> //T //F` (double slashes stop MSYS from rewriting the switches as paths). From PowerShell: `taskkill /PID <pid> /T /F`.
+> 3. **Check for orphans after any command times out or is interrupted, and before ending a long session** --- run the script below and tell the user what it found before using `-Kill`.
+
+### Find and stop orphans
+
+```bash
+# Report only (exit code 1 if orphans are found)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/find-orphan-tool-processes.ps1
+
+# Stop each orphan and its descendants
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows/find-orphan-tool-processes.ps1 -Kill
+```
+
+The script lists `python`/`pythonw`/`mise`/`node` processes, groups them by command line (so you can see *which* script multiplied), and flags those whose parent has exited. `-Names` changes which processes are inspected. A process whose parent exited normally (e.g. a server you deliberately detached) will also be flagged, so review the report before using `-Kill`.
+
+> 📝 **Note:** If the machine is already sluggish and you just want everything gone: `Stop-Process -Name python, mise -Force` from PowerShell. That also stops Python processes you may want (e.g. an editor's language server); they restart on their own.
+
+---
+
 ## Notes & Known Issues
 
 | Issue | Fix |
@@ -325,6 +381,24 @@ After `mise doctor` passes, confirm the tools are callable in **every** shell --
 | mise found by path, but child `pwsh` steps still fail to run `mise` | `install-mise-tools.ps1` and `verify-mise.ps1` spawn child shells that invoke `mise` **by name**. A parent shell started before mise was installed has a stale `$env:Path`, which the children inherit. Fixed: `MISE_EnsureOnPath` prepends mise's directory to `$env:Path` before any child process is spawned. |
 | `verify-prerequisites.ps1` crashes with "the value none is not a valid value for the ToolManager variable" | The `-ToolManager` parameter has `[ValidateSet('auto','micromamba','mise')]`, and the attribute stays bound to the variable for the life of the script -- so the auto-detect branch assigning `'none'` back to it threw. Fixed: detection now resolves into a separate `$Manager` variable. |
 | `python` launches Microsoft Store instead of mise python | Windows ships App Execution Aliases that redirect `python.exe` to the Microsoft Store. These stubs at `WindowsApps\python.exe` may take priority over mise's PATH entries. Fix: Settings > Apps > Advanced app settings > App execution aliases > turn off `python.exe` and `python3.exe`. |
+| Hundreds of `python.exe` and `mise.exe` processes; desktop slow or unresponsive | Orphaned shim chains. On Windows each shim call is `python.exe` (shim) → `mise.exe` → `python.exe` (real), and killing the top doesn't kill the rest. Run `scripts/windows/find-orphan-tool-processes.ps1` to see which command line multiplied, then `-Kill` to stop the orphan trees. Prevention: Section 5 (call `mise which python` once and use that path from non-PowerShell callers; stop process trees, not processes). |
+| Runbook scripts hang past their timeout, or leave child processes running | Scripts read child output with a blocking `ReadToEnd()` before `WaitForExit(timeout)`, so the timeout never fired, and `Process.Kill()` only killed the direct child. Fixed: `install-mise-tools.ps1`, `verify-mise.ps1` and `verify-shell-integration.ps1` now use `PROC_Invoke` from `scripts/shared/process-helpers.ps1`, which reads output asynchronously and stops the whole tree on timeout. |
+| Switching `windows_shim_mode` to `hardlink`/`symlink` to avoid the extra `mise.exe` | Doesn't help. In those modes the shim *is* `mise.exe`, so it still launches the real tool as a child. Keep the default `exe` mode. |
+
+---
+
+## Third-Run Discoveries (Windows, 2026-10-14)
+
+### 1. Orphaned shim processes accumulate into the hundreds
+
+**Symptom:** During a long Claude Code session on another project, the machine became sluggish (typing lagged, windows stopped repainting) with CPU around 48%. `Get-Process` showed hundreds of `python` and `mise` processes. A reboot cleared them.
+
+**Root cause:** `install-mise.ps1` puts `%LOCALAPPDATA%\mise\shims` first on the user PATH (needed for CMD and GUI apps). Claude Code's Bash tool on Windows is Git Bash, which doesn't load the PowerShell profile, so `python` resolved to the shim. With mise's default `exe` shim mode, every call ran as `python.exe` (shim) → `mise.exe` → `python.exe` (real). The mise shim launcher waits on its child but doesn't put it in a Windows job object, and Windows doesn't kill children with their parent --- so each time a command timed out or a background job was stopped, only the top of the chain died and `mise.exe` plus the real interpreter kept running. Any that were mid-loop kept burning CPU.
+
+**Fix:**
+- Section 5 (new) documents the shim process chain and adds Claude Code rules: resolve `mise which python` once and call that path, stop process trees with `taskkill /T`, and check for orphans after timeouts and before ending long sessions.
+- New script `scripts/windows/find-orphan-tool-processes.ps1` reports orphaned `python`/`mise`/`node` processes grouped by command line, and stops them with `-Kill`.
+- The runbook's own scripts had the same bug on a small scale (blocking `ReadToEnd()` before `WaitForExit`, then `Kill()` on the direct child only). They now share `PROC_Invoke` in `scripts/shared/process-helpers.ps1`.
 
 ---
 
@@ -429,6 +503,7 @@ The runbook noted there's no `remove-micromamba.ps1` script. Removal required: d
 - [ ] Terminal restarted
 - [ ] Tools installed (install-mise-tools.ps1)
 - [ ] Shell integration verified (verify-mise.ps1, table shown to user)
+- [ ] No orphaned tool processes (find-orphan-tool-processes.ps1)
 ```
 
 </details>

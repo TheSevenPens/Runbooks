@@ -1,5 +1,26 @@
 # Change History
 
+## 2026-10-14 — Orphaned mise shim processes
+
+During a long Claude Code session on Windows the machine became unresponsive with hundreds of `python.exe` and `mise.exe` processes. Cause: each mise shim call on Windows is a three-process chain (shim → `mise.exe` → real tool), Claude Code's Bash tool goes through shims, and Windows doesn't kill children with their parent, so every timed-out or stopped command left two processes behind. Full writeup in `mise-env-runbook.md` "Third-Run Discoveries".
+
+### New: `scripts/shared/process-helpers.ps1`
+- `PROC_Invoke`: run a child with a timeout, reading stdout/stderr asynchronously, and stop the whole tree on timeout.
+- `PROC_StopTree`: `taskkill /T /F` wrapper (works on PS5.1, which has no `Kill(true)`).
+
+### New: `scripts/windows/find-orphan-tool-processes.ps1`
+- Lists `python`/`pythonw`/`mise`/`node` processes grouped by command line, flags those whose parent has exited, and stops their trees with `-Kill`.
+
+### Fixed: blocking reads and single-process kills in runbook scripts
+- `install-mise-tools.ps1`, `verify-mise.ps1`, `verify-shell-integration.ps1` read child output with `ReadToEnd()` before `WaitForExit(timeout)` (timeout never fired on a hang) and used `Process.Kill()` (orphaned grandchildren). Several steps in `install-mise-tools.ps1` also ignored timeouts entirely. All now use `PROC_Invoke`; timeouts are reported as `FAIL`.
+
+### Docs
+- `mise-env-runbook.md`: new Section 5 (shim process chain, Claude Code rules, orphan cleanup), Known Issues rows, Third-Run Discoveries, checklist item.
+- `CLAUDE.md`: two new key lessons (shims orphan processes; use `PROC_Invoke`).
+- `docs/ARCHITECTURE.md`: Windows gotchas for process trees and `PROC_Invoke`; shared helpers in repo structure.
+- `windows-setup-runbook.md`: Known Issues pointer.
+- `docs/FUTURES.md`: "Shim-free PATH for Claude Code and editors on Windows".
+
 ## 2026-03-30 — Script robustness audit and fixes
 
 Reviewed all 10 Windows PowerShell scripts for robustness and reliability. Fixes applied at three priority levels (critical, high, medium) across 9 scripts.

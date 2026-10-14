@@ -15,6 +15,7 @@
 
 . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 . (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\process-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -64,26 +65,14 @@ if (-not $pwshExe) {
     Write-Host "INFO: Running mise use -g $ToolSpec via activated PS7"
     # Explicitly activate mise before running commands (profile may not activate in non-interactive spawn)
     $activateAndRun = "mise activate pwsh | Out-String | Invoke-Expression; mise use -g $ToolSpec 2>&1 | ForEach-Object { Write-Host `$_ }"
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $pwshExe.Source
-    $psi.Arguments = "-NoProfile -Command `"$activateAndRun`""
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
+    $r = PROC_Invoke -FilePath $pwshExe.Source -Arguments "-NoProfile -Command `"$activateAndRun`"" -TimeoutMs 300000  # 5 min for downloads
 
-    $proc = [System.Diagnostics.Process]::Start($psi)
-    $stdout = $proc.StandardOutput.ReadToEnd()
-    $stderr = $proc.StandardError.ReadToEnd()
-    $exited = $proc.WaitForExit(300000)  # 5 min timeout for downloads
-
-    if (-not $exited) {
-        $proc.Kill()
-        Write-Host "FAIL: mise use -g timed out after 5 minutes"
+    if ($r.TimedOut) {
+        Write-Host "FAIL: mise use -g timed out after 5 minutes (process tree stopped)"
         $FailCount++
     } else {
         # Check for installed markers in output
-        $allOutput = "$stdout $stderr"
+        $allOutput = "$($r.StdOut) $($r.StdErr)"
         if ($allOutput.Contains('installed') -or $allOutput.Contains('config.toml')) {
             Write-Host "OK: Tools installed"
         } else {
@@ -99,18 +88,13 @@ Write-Host ""
 Write-Host "--- Step 3: Re-register tools (safety net) ---"
 
 if ($pwshExe) {
-    $psi2 = New-Object System.Diagnostics.ProcessStartInfo
-    $psi2.FileName = $pwshExe.Source
-    $psi2.Arguments = '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise install 2>&1 | ForEach-Object { Write-Host $_ }"'
-    $psi2.RedirectStandardOutput = $true
-    $psi2.RedirectStandardError = $true
-    $psi2.UseShellExecute = $false
-    $psi2.CreateNoWindow = $true
-
-    $proc2 = [System.Diagnostics.Process]::Start($psi2)
-    $proc2.StandardOutput.ReadToEnd() | Out-Null
-    $proc2.WaitForExit(60000) | Out-Null
-    Write-Host "OK: mise install completed"
+    $r = PROC_Invoke -FilePath $pwshExe.Source -Arguments '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise install 2>&1 | ForEach-Object { Write-Host $_ }"' -TimeoutMs 300000
+    if ($r.TimedOut) {
+        Write-Host "FAIL: mise install timed out after 5 minutes (process tree stopped)"
+        $FailCount++
+    } else {
+        Write-Host "OK: mise install completed"
+    }
 }
 
 # --- Step 4: Regenerate shims ---
@@ -119,18 +103,13 @@ Write-Host ""
 Write-Host "--- Step 4: Regenerate shims ---"
 
 if ($pwshExe) {
-    $psi3 = New-Object System.Diagnostics.ProcessStartInfo
-    $psi3.FileName = $pwshExe.Source
-    $psi3.Arguments = '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise reshim 2>&1"'
-    $psi3.RedirectStandardOutput = $true
-    $psi3.RedirectStandardError = $true
-    $psi3.UseShellExecute = $false
-    $psi3.CreateNoWindow = $true
-
-    $proc3 = [System.Diagnostics.Process]::Start($psi3)
-    $proc3.StandardOutput.ReadToEnd() | Out-Null
-    $proc3.WaitForExit(15000) | Out-Null
-    Write-Host "OK: Shims regenerated"
+    $r = PROC_Invoke -FilePath $pwshExe.Source -Arguments '-NoProfile -Command "mise activate pwsh | Out-String | Invoke-Expression; mise reshim 2>&1"' -TimeoutMs 60000
+    if ($r.TimedOut) {
+        Write-Host "FAIL: mise reshim timed out after 60 seconds (process tree stopped)"
+        $FailCount++
+    } else {
+        Write-Host "OK: Shims regenerated"
+    }
 }
 
 # --- Step 5: Verify tools ---
@@ -147,20 +126,14 @@ $tools = @(
 if ($pwshExe) {
     foreach ($tool in $tools) {
         try {
-            $psi4 = New-Object System.Diagnostics.ProcessStartInfo
-            $psi4.FileName = $pwshExe.Source
-            $psi4.Arguments = "-NoProfile -Command `"mise activate pwsh | Out-String | Invoke-Expression; $($tool.Name) $($tool.Flag) 2>&1 | Select-Object -First 1`""
-            $psi4.RedirectStandardOutput = $true
-            $psi4.RedirectStandardError = $true
-            $psi4.UseShellExecute = $false
-            $psi4.CreateNoWindow = $true
-
-            $proc4 = [System.Diagnostics.Process]::Start($psi4)
-            $vOut = $proc4.StandardOutput.ReadToEnd()
-            $proc4.WaitForExit(15000) | Out-Null
-            $version = STRINGOP_FindFirstNonBlankLine -Text $vOut
+            $r = PROC_Invoke -FilePath $pwshExe.Source -Arguments "-NoProfile -Command `"mise activate pwsh | Out-String | Invoke-Expression; $($tool.Name) $($tool.Flag) 2>&1 | Select-Object -First 1`"" -TimeoutMs 30000
+            $version = ''
+            if (-not $r.TimedOut) { $version = STRINGOP_FindFirstNonBlankLine -Text $r.StdOut }
             if ($version) {
                 Write-Host "OK: $($tool.Name) $version"
+            } elseif ($r.TimedOut) {
+                Write-Host "FAIL: $($tool.Name) --version timed out (process tree stopped)"
+                $FailCount++
             } else {
                 Write-Host "FAIL: $($tool.Name) not callable after install"
                 $FailCount++

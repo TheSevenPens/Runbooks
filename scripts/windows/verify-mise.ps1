@@ -15,6 +15,7 @@
 
 . (Join-Path $PSScriptRoot '..\shared\string-helpers.ps1')
 . (Join-Path $PSScriptRoot '..\shared\mise-helpers.ps1')
+. (Join-Path $PSScriptRoot '..\shared\process-helpers.ps1')
 
 $ErrorActionPreference = 'Continue'
 $FailCount = 0
@@ -38,24 +39,10 @@ function Test-MiseShell {
     }
 
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $exePath.Source
-        $psi.Arguments = "-Command `"$Command`""
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
-        $exited = $proc.WaitForExit($TimeoutMs)
-
-        if (-not $exited) {
-            $proc.Kill()
-            $proc.WaitForExit(5000)
-            return "FAIL(timeout)"
-        }
+        $r = PROC_Invoke -FilePath $exePath.Source -Arguments "-Command `"$Command`"" -TimeoutMs $TimeoutMs
+        if ($r.TimedOut) { return "FAIL(timeout)" }
+        $stdout = $r.StdOut
+        $stderr = $r.StdErr
 
         $allOutput = "$stdout $stderr"
         if ($allOutput.Contains($SuccessMarker)) {
@@ -80,24 +67,10 @@ function Test-CmdTool {
 
     $shimDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "cmd.exe"
-        $psi.Arguments = "/c `"set PATH=$shimDir;%PATH% && $ToolName $VersionFlag`""
-        $psi.RedirectStandardOutput = $true
-        $psi.RedirectStandardError = $true
-        $psi.UseShellExecute = $false
-        $psi.CreateNoWindow = $true
-
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
-        $exited = $proc.WaitForExit($TimeoutMs)
-
-        if (-not $exited) {
-            $proc.Kill()
-            $proc.WaitForExit(5000)
-            return ""
-        }
+        $r = PROC_Invoke -FilePath "cmd.exe" -Arguments "/c `"set PATH=$shimDir;%PATH% && $ToolName $VersionFlag`"" -TimeoutMs $TimeoutMs
+        if ($r.TimedOut) { return "" }
+        $stdout = $r.StdOut
+        $stderr = $r.StdErr
 
         $version = STRINGOP_FindFirstNonBlankLine -Text $stdout
         if (-not $version) { $version = STRINGOP_FindFirstNonBlankLine -Text $stderr }
@@ -233,23 +206,17 @@ foreach ($shell in $shells) {
         } else {
             $result = ""
             try {
-                $psi = New-Object System.Diagnostics.ProcessStartInfo
-                $psi.FileName = (Get-Command $shell.Exe -ErrorAction SilentlyContinue).Source
+                $shellExe = (Get-Command $shell.Exe -ErrorAction SilentlyContinue).Source
                 # For PS5.1: suppress chpwd warning via env var before activation
                 # For PS7: profile loads normally
                 if ($shell.Name -eq "PowerShell 5.1") {
-                    $psi.Arguments = "-NoProfile -Command `"`$env:MISE_PWSH_CHPWD_WARNING='0'; mise activate pwsh | Out-String | Invoke-Expression; $tool --version 2>&1 | Select-Object -First 1`""
+                    $shellArgs = "-NoProfile -Command `"`$env:MISE_PWSH_CHPWD_WARNING='0'; mise activate pwsh | Out-String | Invoke-Expression; $tool --version 2>&1 | Select-Object -First 1`""
                 } else {
-                    $psi.Arguments = "-Command `"$tool --version 2>&1 | Select-Object -First 1`""
+                    $shellArgs = "-Command `"$tool --version 2>&1 | Select-Object -First 1`""
                 }
-                $psi.RedirectStandardOutput = $true
-                $psi.RedirectStandardError = $true
-                $psi.UseShellExecute = $false
-                $psi.CreateNoWindow = $true
-
-                $proc = [System.Diagnostics.Process]::Start($psi)
-                $stdout = $proc.StandardOutput.ReadToEnd()
-                $proc.WaitForExit(15000) | Out-Null
+                $r = PROC_Invoke -FilePath $shellExe -Arguments $shellArgs -TimeoutMs 30000
+                $stdout = ''
+                if (-not $r.TimedOut) { $stdout = $r.StdOut }
                 $version = STRINGOP_FindFirstNonBlankLine -Text $stdout
             } catch {
                 $version = ""
